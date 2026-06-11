@@ -13,14 +13,30 @@
             --text-main: #dbdee1;
             --text-muted: #949ba4;
             --discord-blue: #5865f2;
+            --discord-blue-hover: #4752c4;
             --discord-green: #23a55a;
             --discord-red: #da373c;
             --discord-offline: #4e5058;
+            --bg-modal: #313338;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg-darker); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; }
+        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg-darker); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; position: relative; }
 
+        /* ВІКНО АВТОРИЗАЦІЇ (ЛОГІН) */
+        .auth-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: var(--bg-darker); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+        .auth-box { background: var(--bg-modal); width: 100%; max-width: 480px; padding: 32px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); text-align: center; }
+        .auth-title { font-size: 24px; font-weight: 600; color: #fff; margin-bottom: 8px; }
+        .auth-subtitle { color: var(--text-muted); font-size: 16px; margin-bottom: 20px; }
+        .auth-form-group { text-align: left; margin-bottom: 20px; }
+        .auth-label { display: block; color: var(--text-muted); font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }
+        .auth-input { width: 100%; padding: 10px; background: #1e1f22; border: 1px solid #111214; border-radius: 3px; color: #fff; font-size: 16px; outline: none; transition: border 0.2s; }
+        .auth-input:focus { border-color: var(--discord-blue); }
+        .auth-btn { width: 100%; padding: 12px; background: var(--discord-blue); color: #fff; border: none; border-radius: 3px; font-size: 16px; font-weight: 500; cursor: pointer; transition: background 0.2s; margin-top: 10px; }
+        .auth-btn:hover { background: var(--discord-blue-hover); }
+        .auth-error { color: var(--discord-red); font-size: 14px; margin-top: 12px; display: none; text-align: left; }
+
+        /* ОСНОВНИЙ ІНТЕРФЕЙС ЧАТУ */
         .sidebar { width: 220px; background-color: var(--bg-sidebar); display: flex; flex-direction: column; flex-shrink: 0; }
         .server-header { padding: 15px; font-weight: bold; font-size: 16px; border-bottom: 1px solid #1f2023; color: #fff; }
         .channels-list { flex-grow: 1; padding: 10px 8px; }
@@ -83,6 +99,26 @@
     </style>
 </head>
 <body>
+
+    <div class="auth-overlay" id="auth-modal">
+        <div class="auth-box">
+            <div class="auth-title">З поверненням!</div>
+            <div class="auth-subtitle">Ми так раді бачити вас знову!</div>
+            
+            <div class="auth-form-group">
+                <label class="auth-label">Нікнейм або електронна пошта</label>
+                <input type="text" id="auth-username" class="auth-input" autocomplete="off" placeholder="Введіть ваш нікнейм">
+            </div>
+            
+            <div class="auth-form-group">
+                <label class="auth-label">Пароль</label>
+                <input type="password" id="auth-password" class="auth-input" placeholder="Введіть ваш пароль">
+            </div>
+            
+            <button class="auth-btn" id="auth-submit-btn">Увійти / Зареєструватися</button>
+            <div class="auth-error" id="auth-error-msg">Помилка авторизації</div>
+        </div>
+    </div>
 
     <div class="sidebar">
         <div class="server-header">🪐 Мій Сервер</div>
@@ -159,6 +195,13 @@
         const videoContainer = document.getElementById('video-container');
         const incomingCallPopup = document.getElementById('incoming-call-popup');
 
+        // Нові елементи модального вікна
+        const authModal = document.getElementById('auth-modal');
+        const authSubmitBtn = document.getElementById('auth-submit-btn');
+        const authUsernameInput = document.getElementById('auth-username');
+        const authPasswordInput = document.getElementById('auth-password');
+        const authErrorMsg = document.getElementById('auth-error-msg');
+
         let currentChatTarget = null; 
         let myId = null;
         let globalUsersCache = [];
@@ -169,9 +212,383 @@
         let mediaRecorder = null;
         let audioChunks = [];
         let isRecording = false;
-        let recordingStream = null; // Потік суто для ГС
+        let recordingStream = null; 
 
         let localStream = null;
         let peerConnection = null;
         let callActiveWith = null; 
-        let incomingCallData
+        let incomingCallData = null;
+
+        const rtcConfig = {
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        };
+
+        // ОБРОБКА КЛІКУ НА КНОПКУ ВХОДУ В МОДАЛЦІ
+        authSubmitBtn.addEventListener('click', () => {
+            const name = authUsernameInput.value.trim();
+            const pass = authPasswordInput.value.trim();
+
+            if (!name || !pass) {
+                authErrorMsg.textContent = "Заповніть усі поля!";
+                authErrorMsg.style.display = 'block';
+                return;
+            }
+
+            socket.emit('register user', { username: name, password: pass }, (res) => {
+                if (res.success) {
+                    // Ховаємо модалку авторизації
+                    authModal.style.display = 'none';
+
+                    myId = res.user.id;
+                    document.getElementById('my-profile-box').style.display = 'flex';
+                    document.getElementById('my-username').textContent = res.user.username;
+                    document.getElementById('my-id').textContent = res.user.id;
+                    document.getElementById('my-avatar').textContent = res.user.avatar;
+                    
+                    input.disabled = false;
+                    micBtn.disabled = false;
+                    input.placeholder = `Написати в #основний...`;
+                } else {
+                    authErrorMsg.textContent = res.reason;
+                    authErrorMsg.style.display = 'block';
+                }
+            });
+        });
+
+        // Дозволяємо надсилати форму авторизації по натисканню Enter
+        authPasswordInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') authSubmitBtn.click();
+        });
+
+        // ОБРОБКА ГС
+        async function startRecording() {
+            try {
+                recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(recordingStream);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+                
+                mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    if (recordingStream) {
+                        recordingStream.getTracks().forEach(track => track.stop());
+                    }
+                    
+                    const reader = new FileReader();
+                    reader.readAsDataURL(audioBlob);
+                    reader.onloadend = () => {
+                        socket.emit('chat message', { text: null, audio: reader.result, toId: currentChatTarget });
+                    };
+                };
+
+                mediaRecorder.start();
+                isRecording = true;
+                micBtn.classList.add('recording');
+                input.disabled = true;
+            } catch (err) {
+                alert("Не вдалося отримати доступ до мікрофона для запису ГС!");
+                isRecording = false;
+                micBtn.classList.remove('recording');
+                input.disabled = false;
+            }
+        }
+
+        micBtn.addEventListener('click', () => {
+            if (!isRecording) {
+                startRecording();
+            } else {
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                }
+                isRecording = false;
+                micBtn.classList.remove('recording');
+                input.disabled = false;
+            }
+        });
+
+        // ================= ЛОГІКА ДЗВІНКІВ =================
+
+        async function startCall(withVideo) {
+            if (!currentChatTarget) return;
+            callActiveWith = currentChatTarget;
+
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: withVideo });
+                document.getElementById('localVideo').srcObject = localStream;
+                videoContainer.style.display = 'flex';
+
+                peerConnection = new RTCPeerConnection(rtcConfig);
+                localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+                peerConnection.ontrack = (event) => {
+                    document.getElementById('remoteVideo').srcObject = event.streams[0];
+                };
+
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        socket.emit('ice-candidate', { toId: callActiveWith, candidate: event.candidate });
+                    }
+                };
+
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                socket.emit('call-user', { toId: callActiveWith, offer: offer, video: withVideo });
+
+            } catch (err) {
+                alert("Помилка: Дзвінок неможливий без дозволу на камеру/мікрофон!");
+                endCall();
+            }
+        }
+
+        socket.on('incoming-call', async (data) => {
+            incomingCallData = data;
+            document.getElementById('incoming-call-text').textContent = `Дзвонить ${data.fromName} (${data.video ? 'Відео' : 'Аудіо'})`;
+            incomingCallPopup.style.display = 'flex';
+        });
+
+        document.getElementById('btn-accept-call').addEventListener('click', async () => {
+            incomingCallPopup.style.display = 'none';
+            if (!incomingCallData) return;
+            callActiveWith = incomingCallData.fromId;
+
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: incomingCallData.video });
+                document.getElementById('localVideo').srcObject = localStream;
+                videoContainer.style.display = 'flex';
+
+                peerConnection = new RTCPeerConnection(rtcConfig);
+                localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+                peerConnection.ontrack = (event) => {
+                    document.getElementById('remoteVideo').srcObject = event.streams[0];
+                };
+
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        socket.emit('ice-candidate', { toId: callActiveWith, candidate: event.candidate });
+                    }
+                };
+
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(incomingCallData.offer));
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+
+                socket.emit('accept-call', { toId: callActiveWith, answer: answer });
+
+            } catch (err) {
+                alert("Дзвінок відхилено автоматично: ви не надали дозвіл на медіа-пристрої!");
+                socket.emit('reject-or-end-call', { toId: callActiveWith });
+                closeMedia();
+            }
+        });
+
+        document.getElementById('btn-reject-call').addEventListener('click', () => {
+            incomingCallPopup.style.display = 'none';
+            if (incomingCallData) {
+                socket.emit('reject-or-end-call', { toId: incomingCallData.fromId });
+                incomingCallData = null;
+            }
+        });
+
+        socket.on('call-accepted', async (data) => {
+            if (peerConnection) {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+            }
+        });
+
+        socket.on('ice-candidate', async (data) => {
+            if (peerConnection && data.candidate) {
+                try {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                } catch (e) { console.error(e); }
+            }
+        });
+
+        socket.on('call-ended', () => {
+            alert("Дзвінок завершено.");
+            closeMedia();
+        });
+
+        function endCall() {
+            if (callActiveWith) {
+                socket.emit('reject-or-end-call', { toId: callActiveWith });
+            }
+            closeMedia();
+        }
+
+        function closeMedia() {
+            videoContainer.style.display = 'none';
+            incomingCallPopup.style.display = 'none';
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+            callActiveWith = null;
+            incomingCallData = null;
+            document.getElementById('localVideo').srcObject = null;
+            document.getElementById('remoteVideo').srcObject = null;
+        }
+
+        // ============================================================
+
+        function renderMessages() {
+            messagesContainer.innerHTML = '';
+            allMessages.forEach(msg => {
+                if (!currentChatTarget) {
+                    if (msg.isPrivate) return;
+                } else {
+                    if (!msg.isPrivate) return;
+                    const isFromMeToFriend = (msg.userId === myId && msg.toId === currentChatTarget);
+                    const isFromFriendToMe = (msg.userId === currentChatTarget && msg.toId === myId);
+                    if (!isFromMeToFriend && !isFromFriendToMe) return;
+                }
+
+                const messageDiv = document.createElement('div');
+                messageDiv.classList.add('message');
+                if (msg.isPrivate) messageDiv.classList.add('private-msg');
+                
+                let contentHTML = msg.text ? `<div class="message-text">${msg.text}</div>` : '';
+                if (msg.audio) {
+                    contentHTML += `<audio class="audio-player" src="${msg.audio}" controls></audio>`;
+                }
+                
+                messageDiv.innerHTML = `
+                    <div class="avatar">${msg.avatar}</div>
+                    <div class="message-content">
+                        <div class="message-user">
+                            ${msg.user} <span>#${msg.userId} ${msg.isPrivate ? '[ЛС]' : ''}</span>
+                            <span class="message-time">${msg.time}</span>
+                        </div>
+                        ${contentHTML}
+                    </div>
+                `;
+                messagesContainer.appendChild(messageDiv);
+            });
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function switchToMainChat() {
+            currentChatTarget = null;
+            callControlsTop.style.display = 'none';
+            document.getElementById('channel-main-btn').classList.add('active');
+            document.getElementById('chat-title').textContent = '# основний';
+            input.placeholder = "Написати в #основний...";
+            document.querySelectorAll('#friends-box .user-list-item').forEach(el => el.classList.remove('active-chat'));
+            renderMessages();
+        }
+
+        function switchToPrivateChat(friendId, friendName) {
+            currentChatTarget = friendId;
+            callControlsTop.style.display = 'flex';
+            document.getElementById('channel-main-btn').classList.remove('active');
+            document.getElementById('chat-title').textContent = `💬 Особисті з ${friendName}`;
+            input.placeholder = `Написати для ${friendName}...`;
+            
+            document.querySelectorAll('#friends-box .user-list-item').forEach(el => {
+                el.classList.remove('active-chat');
+                if(parseInt(el.dataset.id) === friendId) el.classList.add('active-chat');
+            });
+            renderMessages();
+        }
+
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (input.value.trim()) {
+                socket.emit('chat message', { text: input.value, toId: currentChatTarget });
+                input.value = '';
+            }
+        });
+
+        document.getElementById('add-friend-btn').addEventListener('click', () => {
+            const idInput = document.getElementById('friend-id-input');
+            const targetId = parseInt(idInput.value);
+            if (!targetId) return;
+
+            socket.emit('add friend', targetId, (res) => {
+                if (res.success) {
+                    alert(`Успішно додано!`);
+                    savedFriendsNames[targetId] = res.friendName;
+                    localStorage.setItem('saved_friends_names', JSON.stringify(savedFriendsNames));
+                } else {
+                    alert(res.reason);
+                }
+                idInput.value = '';
+            });
+        });
+
+        socket.on('friend added', (data) => {
+            alert(`Користувач ${data.username} додав вас у друзі!`);
+            savedFriendsNames[data.id] = data.username;
+            localStorage.setItem('saved_friends_names', JSON.stringify(savedFriendsNames));
+        });
+
+        socket.on('update users', (users) => {
+            globalUsersCache = users;
+            const listContainer = document.getElementById('online-users-list');
+            listContainer.innerHTML = '';
+
+            const myUserObj = users.find(u => u.id === myId);
+            if (myUserObj && myUserObj.friends) myFriendsList = myUserObj.friends;
+
+            users.forEach(u => {
+                const item = document.createElement('div');
+                item.classList.add('user-list-item');
+                item.innerHTML = `
+                    <div class="mini-avatar">${u.avatar}</div>
+                    <div>${u.username} <span style="font-size:11px; color:var(--text-muted);">#${u.id}</span></div>
+                `;
+                listContainer.appendChild(item);
+                if (myFriendsList.includes(u.id)) savedFriendsNames[u.id] = u.username;
+            });
+            localStorage.setItem('saved_friends_names', JSON.stringify(savedFriendsNames));
+
+            const friendsContainer = document.getElementById('friends-box');
+            friendsContainer.innerHTML = '';
+
+            if (myFriendsList.length === 0) {
+                friendsContainer.innerHTML = '<div style="font-size:13px; color:var(--text-muted);">Немає друзів</div>';
+            } else {
+                myFriendsList.forEach(friendId => {
+                    const onlineFriend = users.find(u => u.id === friendId);
+                    const fItem = document.createElement('div');
+                    fItem.classList.add('user-list-item');
+                    fItem.dataset.id = friendId;
+                    if (currentChatTarget === friendId) fItem.classList.add('active-chat');
+
+                    if (onlineFriend) {
+                        fItem.innerHTML = `
+                            <div class="mini-avatar" style="background:var(--discord-green)">${onlineFriend.avatar}</div>
+                            <div>${onlineFriend.username} <span style="font-size:11px; color:var(--text-muted);">#${friendId}</span></div>
+                        `;
+                        fItem.onclick = () => switchToPrivateChat(onlineFriend.id, onlineFriend.username);
+                    } else {
+                        const oldName = savedFriendsNames[friendId] || "Користувач";
+                        fItem.classList.add('is-offline');
+                        fItem.innerHTML = `
+                            <div class="mini-avatar" style="background:var(--discord-offline)">${oldName.charAt(0).toUpperCase()}</div>
+                            <div>${oldName} <span style="font-size:11px; color:var(--text-muted);">#${friendId} [офлайн]</span></div>
+                        `;
+                        fItem.onclick = () => switchToPrivateChat(friendId, oldName);
+                    }
+                    friendsContainer.appendChild(fItem);
+                });
+            }
+        });
+
+        socket.on('load history', (history) => {
+            allMessages = history;
+            renderMessages();
+        });
+
+        socket.on('chat message', (msg) => {
+            allMessages.push(msg);
+            renderMessages();
+        });
+    </script>
+</body>
+</html>
