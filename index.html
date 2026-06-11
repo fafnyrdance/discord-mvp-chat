@@ -65,7 +65,7 @@
 
         .channel-item::before { content: "# "; font-weight: bold; }
 
-        /* Профіль поточного юзера внизу лівого сайдбару */
+        /* Профіль поточного юзера */
         .user-profile {
             padding: 10px;
             background: #232428;
@@ -135,7 +135,7 @@
 
         #input { flex-grow: 1; background: none; border: none; outline: none; color: var(--text-main); font-size: 15px; }
 
-        /* Правий Сайдбар (Користувачі та Друзі) */
+        /* Правий Сайдбар */
         .right-sidebar {
             width: 240px;
             background-color: var(--bg-sidebar);
@@ -181,7 +181,7 @@
             background: var(--discord-blue);
             color: white;
             border: none;
-            padding: 6px 10px;
+            padding: 8px 10px;
             border-radius: 4px;
             cursor: pointer;
             width: 100%;
@@ -259,7 +259,9 @@
         const input = document.getElementById('input');
         const messagesContainer = document.getElementById('messages');
 
-        // Функція реєстрації з унікальним нікнеймом
+        let globalUsersCache = []; // Зберігаємо список усіх, щоб швидко перемальовувати друзів
+        let myFriendsList = [];    // Список ID моїх друзів
+
         function askForUsername() {
             let name = prompt("Створіть унікальний нікнейм для входу:");
             if (!name) {
@@ -269,29 +271,25 @@
 
             socket.emit('register user', name, (response) => {
                 if (response.success) {
-                    // Показуємо наш профіль внизу зліва
                     document.getElementById('my-profile-box').style.display = 'flex';
                     document.getElementById('my-username').textContent = response.user.username;
                     document.getElementById('my-id').textContent = response.user.id;
                     document.getElementById('my-avatar').textContent = response.user.avatar;
                     
-                    // Активуємо поле вводу чату
                     input.disabled = false;
                     input.placeholder = `Написати в #основний...`;
                 } else {
-                    alert(response.reason); // Виводимо причину відмови
-                    askForUsername(); // Запитуємо знову
+                    alert(response.reason);
+                    askForUsername();
                 }
             });
         }
 
-        // Запуск реєстрації при завантаженні сторінки
         askForUsername();
 
         function displayMessage(msg) {
             const messageDiv = document.createElement('div');
             messageDiv.classList.add('message');
-            
             messageDiv.innerHTML = `
                 <div class="avatar">${msg.avatar}</div>
                 <div class="message-content">
@@ -313,31 +311,72 @@
             }
         });
 
-        // Обробка кнопки "Додати в друзі"
+        // Оновлення списку друзів на екрані
+        function renderFriends() {
+            const friendsContainer = document.getElementById('friends-box');
+            friendsContainer.innerHTML = '';
+
+            const activeFriends = globalUsersCache.filter(u => myFriendsList.includes(u.id));
+
+            if (activeFriends.length === 0) {
+                friendsContainer.innerHTML = '<div style="font-size:13px; color:var(--text-muted);">У вас поки немає друзів</div>';
+                return;
+            }
+
+            activeFriends.forEach(u => {
+                const fItem = document.createElement('div');
+                fItem.classList.add('user-list-item');
+                fItem.innerHTML = `
+                    <div class="mini-avatar" style="background:var(--discord-green)">${u.avatar}</div>
+                    <div>${u.username} <span style="font-size:11px; color:var(--text-muted);">#${u.id}</span></div>
+                `;
+                friendsContainer.appendChild(fItem);
+            });
+        }
+
+        // Клікнули "Додати друга"
         document.getElementById('add-friend-btn').addEventListener('click', () => {
             const idInput = document.getElementById('friend-id-input');
-            if (!idInput.value) return;
+            const targetId = parseInt(idInput.value);
+            if (!targetId) return;
 
-            socket.emit('add friend', idInput.value, (res) => {
-                alert(res.success ? `Успішно! ${res.friendName} доданий у друзі.` : res.reason);
+            socket.emit('add friend', targetId, (res) => {
+                if (res.success) {
+                    alert(`Успішно! ${res.friendName} доданий у друзі.`);
+                    if (!myFriendsList.includes(targetId)) {
+                        myFriendsList.push(targetId); // Додаємо локально в список друзів
+                    }
+                    renderFriends(); // Одразу перемальовуємо блок на екрані
+                } else {
+                    alert(res.reason);
+                }
                 idInput.value = '';
             });
         });
 
-        // Повідомлення про те, що хтось додав тебе
+        // Хтось інший додав тебе
         socket.on('friend added', (data) => {
             alert(`Користувач ${data.username} #${data.id} додав вас у друзі!`);
+            if (!myFriendsList.includes(data.id)) {
+                myFriendsList.push(data.id);
+            }
+            renderFriends();
         });
 
-        // Оновлення списку всіх користувачів онлайн та списку друзів
+        // Оновлення списку користувачів онлайн
         socket.on('update users', (users) => {
+            globalUsersCache = users; // Оновлюємо кеш
+            
             const listContainer = document.getElementById('online-users-list');
             listContainer.innerHTML = '';
 
-            const myId = parseInt(document.getElementById('my-id').textContent);
+            const myId = parseInt(document.getElementById('my-id').textContent || "0");
             const myUserObj = users.find(u => u.id === myId);
+            
+            if (myUserObj && myUserObj.friends) {
+                myFriendsList = myUserObj.friends; // Синхронізуємо друзів з сервером
+            }
 
-            // Малюємо список усіх користувачів
             users.forEach(u => {
                 const item = document.createElement('div');
                 item.classList.add('user-list-item');
@@ -348,23 +387,7 @@
                 listContainer.appendChild(item);
             });
 
-            // Оновлюємо панель друзів
-            if (myUserObj && myUserObj.friends.length > 0) {
-                const friendsContainer = document.getElementById('friends-box');
-                friendsContainer.innerHTML = '';
-                
-                users.forEach(u => {
-                    if (myUserObj.friends.includes(u.id)) {
-                        const fItem = document.createElement('div');
-                        fItem.classList.add('user-list-item');
-                        fItem.innerHTML = `
-                            <div class="mini-avatar" style="background:var(--discord-green)">${u.avatar}</div>
-                            <div>${u.username} <span style="font-size:11px; color:var(--text-muted);">#${u.id}</span></div>
-                        `;
-                        friendsContainer.appendChild(fItem);
-                    }
-                });
-            }
+            renderFriends(); // Перемальовуємо друзів при будь-якій зміні онлайну
         });
 
         socket.on('load history', (history) => {
