@@ -145,7 +145,7 @@
         <div class="video-container" id="video-container">
             <video id="localVideo" autoplay playsinline muted></video>
             <video id="remoteVideo" autoplay playsinline></video>
-            <audio id="remoteAudio" autoplay playsinline controls style="display:none;"></audio>
+            <audio id="remoteAudio" autoplay playsinline></audio>
             <div class="video-overlay-buttons">
                 <button class="end-call-btn" onclick="endCall()">Покласти слухавку 🛑</button>
             </div>
@@ -212,17 +212,14 @@
         let callActiveWith = null; 
         let incomingCallData = null;
 
-        // ПУБЛІЧНІ СЕРВЕРИ ДЛЯ ОБХОДУ БЛОКУВАНЬ РОУТЕРІВ (STUN/TURN)
+        // Потужний список серверів для пробиття NAT-роутерів
         const rtcConfig = {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },
                 { urls: 'stun:stun2.l.google.com:19302' },
                 { urls: 'stun:stun3.l.google.com:19302' },
-                { urls: 'stun:stun4.l.google.com:19302' },
-                { urls: 'stun:stun.ekiga.net' },
-                { urls: 'stun:stun.ideasip.com' },
-                { urls: 'stun:stun.schlund.de' }
+                { urls: 'stun:stun4.l.google.com:19302' }
             ],
             iceCandidatePoolSize: 10
         };
@@ -283,6 +280,10 @@
             });
         });
 
+        authPasswordInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') authSubmitBtn.click();
+        });
+
         // ЗАПИС ГС
         async function startRecording() {
             try {
@@ -324,37 +325,21 @@
             }
         });
 
-        // ================= СУПЕР-ФІКС ОТРИМАННЯ ЗВУКУ =================
-
+        // КЕРУВАННЯ МЕДІА-ПОТОКАМИ (ЗВУК ДЗВІНКІВ)
         function setupTrackEvent() {
             peerConnection.ontrack = (event) => {
-                console.log("Знайдено активний трек друга:", event.track.kind);
+                console.log("Отримано медіа-трек:", event.track.kind);
+                const remoteStream = event.streams[0];
                 
                 const rVideo = document.getElementById('remoteVideo');
                 const rAudio = document.getElementById('remoteAudio');
 
-                // Передаємо потік в елементи відтворення
-                if (event.streams && event.streams[0]) {
-                    rVideo.srcObject = event.streams[0];
-                    rAudio.srcObject = event.streams[0];
-                } else {
-                    // Якщо потік прийшов без контейнера, створюємо його вручну
-                    const inboundStream = new MediaStream([event.track]);
-                    rVideo.srcObject = inboundStream;
-                    rAudio.srcObject = inboundStream;
-                }
+                if (rVideo) rVideo.srcObject = remoteStream;
+                if (rAudio) rAudio.srcObject = remoteStream;
 
-                // Примусова активація звукової доріжки
-                rAudio.muted = false;
-                rVideo.muted = false;
-                
-                // Пробуємо грати звук кожну секунду, поки браузер не пропустить його
-                const playAttempt = setInterval(() => {
-                    rAudio.play().then(() => {
-                        console.log("Звук успішно запущено!");
-                        clearInterval(playAttempt);
-                    }).catch(err => console.log("Браузер блокує звук, чекаємо дії користувача..."));
-                }, 1000);
+                // Будимо плеєри
+                if (rVideo) rVideo.play().catch(() => {});
+                if (rAudio) rAudio.play().catch(() => {});
             };
         }
 
@@ -383,7 +368,7 @@
                 socket.emit('call-user', { toId: callActiveWith, offer: offer, video: withVideo });
 
             } catch (err) {
-                alert("Помилка доступу до мікрофона/камери!");
+                alert("Помилка доступу до камери/мікрофона!");
                 endCall();
             }
         }
@@ -478,8 +463,7 @@
             document.getElementById('remoteAudio').srcObject = null;
         }
 
-        // ============================================================
-
+        // ВІДОБРАЖЕННЯ ПОВІДОМЛЕНЬ
         function renderMessages() {
             messagesContainer.innerHTML = '';
             allMessages.forEach(msg => {
@@ -498,7 +482,7 @@
                 
                 let contentHTML = msg.text ? `<div class="message-text">${msg.text}</div>` : '';
                 if (msg.audio) {
-                    contentHTML += `<audio class="audio-player" src="${msg.audio}" controls preload="auto"></audio>`;
+                    contentHTML += `<audio class="audio-player" src="${msg.audio}" controls preload="metadata"></audio>`;
                 }
                 
                 messageDiv.innerHTML = `
