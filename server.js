@@ -9,9 +9,15 @@ const io = new Server(server, {
     maxHttpBufferSize: 1e7 // Дозволяємо великі ГС файли (до 10 МБ)
 });
 
-app.use(express.static(path.join(__dirname, 'public')));
+// Роздаємо статичні файли безпосередньо з кореневої папки проєкту
+app.use(express.static(__dirname));
 
-// Наша тимчасова база даних в оперативці
+// Головна сторінка віддає index.html
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// База даних користувачів та історія в оперативці
 const users = {}; 
 const messagesHistory = [];
 
@@ -46,7 +52,7 @@ io.on('connection', (socket) => {
         let existingUser = Object.values(users).find(u => u.username.toLowerCase() === username.toLowerCase());
 
         if (existingUser) {
-            // Якщо користувач існує — перевіряємо пароль (Вхід)
+            // Вхід
             if (existingUser.password === password) {
                 socket.userId = existingUser.id;
                 existingUser.socketId = socket.id;
@@ -59,8 +65,8 @@ io.on('connection', (socket) => {
                 callback({ success: false, reason: "Неправильний пароль для цього нікнейму!" });
             }
         } else {
-            // Якщо нікнейму немає — створюємо нового (Реєстрація)
-            const newId = Math.floor(1000 + Math.random() * 9000); // 4-значний ID
+            // Реєстрація нового користувача
+            const newId = Math.floor(1000 + Math.random() * 9000); 
             const avatarLetter = username.charAt(0).toUpperCase();
 
             const newUser = {
@@ -96,7 +102,6 @@ io.on('connection', (socket) => {
             return callback({ success: false, reason: "Користувача з таким ID не знайдено!" });
         }
 
-        // Перевіряємо, чи вже не в друзях
         if (!users[myId].friends.includes(targetId)) {
             users[myId].friends.push(targetId);
         }
@@ -105,17 +110,14 @@ io.on('connection', (socket) => {
         }
 
         callback({ success: true });
-
-        // Оновлюємо списки в обох
         io.emit('update users', getOnlineUsersArray());
 
-        // Повідомляємо друга, якщо він онлайн
         if (targetUser.online && targetUser.socketId) {
             io.to(targetUser.socketId).emit('friend added', { id: myId, username: users[myId].username });
         }
     });
 
-    // ПОВІДОМЛЕННЯ (ЧАТ ТА ГС)
+    // ЧАТ І ГОЛОСОВІ ПОВІДОМЛЕННЯ
     socket.on('chat message', (msgData) => {
         const myId = socket.userId;
         if (!myId || !users[myId]) return;
@@ -135,21 +137,19 @@ io.on('connection', (socket) => {
         };
 
         if (fullMsg.isPrivate) {
-            // Відправляємо в ЛС (собі і другу)
             const targetUser = users[msgData.toId];
             if (targetUser && targetUser.socketId && targetUser.online) {
                 io.to(targetUser.socketId).emit('chat message', fullMsg);
             }
             socket.emit('chat message', fullMsg);
-            messagesHistory.push(fullMsg); // Зберігаємо в історію
+            messagesHistory.push(fullMsg); 
         } else {
-            // Загальний чат
             io.emit('chat message', fullMsg);
             messagesHistory.push(fullMsg);
         }
     });
 
-    // СИГНАЛІНГ ДЛЯ ДЗВІНКІВ (WebRTC)
+    // ВЕБ-РТС СИГНАЛІНГ ДЛЯ ДЗВІНКІВ
     socket.on('call-user', (data) => {
         const myId = socket.userId;
         if (!myId || !users[myId]) return;
@@ -190,11 +190,9 @@ io.on('connection', (socket) => {
         }
     });
 
-    // ВІДКЛЮЧЕННЯ
     socket.on('disconnect', () => {
         if (socket.userId && users[socket.userId]) {
             users[socket.userId].online = false;
-            console.log(`Користувач офлайн: ${users[socket.userId].username}`);
             io.emit('update users', getOnlineUsersArray());
         }
     });
@@ -212,5 +210,5 @@ function getOnlineUsersArray() {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`Сервер запущено на порту ${PORT}`);
+    console.log(`Сервер працює на порту ${PORT}`);
 });
