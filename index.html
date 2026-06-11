@@ -14,110 +14,30 @@
             --text-muted: #949ba4;
             --discord-blue: #5865f2;
             --discord-green: #23a55a;
-            --discord-red: #da373c;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg-darker); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; }
 
-        body {
-            font-family: 'Segoe UI', sans-serif;
-            background-color: var(--bg-darker);
-            color: var(--text-main);
-            display: flex;
-            height: 100vh;
-            overflow: hidden;
-        }
-
-        /* Лівий Сайдбар */
-        .sidebar {
-            width: 220px;
-            background-color: var(--bg-sidebar);
-            display: flex;
-            flex-direction: column;
-            flex-shrink: 0;
-        }
-
-        .server-header {
-            padding: 15px;
-            font-weight: bold;
-            font-size: 16px;
-            border-bottom: 1px solid #1f2023;
-            color: #fff;
-        }
-
-        .channels-list {
-            flex-grow: 1;
-            padding: 10px 8px;
-        }
-
-        .channel-item {
-            padding: 8px 12px;
-            border-radius: 4px;
-            color: var(--text-muted);
-            font-size: 15px;
-            margin-bottom: 2px;
-        }
-
-        .channel-item.active {
-            background-color: #35373c;
-            color: var(--text-main);
-        }
-
+        /* Ліва панель */
+        .sidebar { width: 220px; background-color: var(--bg-sidebar); display: flex; flex-direction: column; flex-shrink: 0; }
+        .server-header { padding: 15px; font-weight: bold; font-size: 16px; border-bottom: 1px solid #1f2023; color: #fff; }
+        .channels-list { flex-grow: 1; padding: 10px 8px; }
+        .channel-item { padding: 8px 12px; border-radius: 4px; color: var(--text-muted); font-size: 15px; margin-bottom: 2px; cursor: pointer; }
+        .channel-item.active { background-color: #35373c; color: var(--text-main); }
         .channel-item::before { content: "# "; font-weight: bold; }
-
-        /* Профіль поточного юзера */
-        .user-profile {
-            padding: 10px;
-            background: #232428;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 14px;
-        }
+        .user-profile { padding: 10px; background: #232428; display: flex; align-items: center; gap: 10px; font-size: 14px; }
         .user-profile .my-tag { font-size: 11px; color: var(--text-muted); }
 
-        /* Центральний Чат */
-        .chat-area {
-            flex-grow: 1;
-            background-color: var(--bg-chat);
-            display: flex;
-            flex-direction: column;
-        }
-
-        .chat-header {
-            padding: 15px 20px;
-            font-weight: bold;
-            font-size: 16px;
-            border-bottom: 1px solid #2e3035;
-            color: #fff;
-        }
-
-        .messages-container {
-            flex-grow: 1;
-            padding: 20px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-
+        /* Чат */
+        .chat-area { flex-grow: 1; background-color: var(--bg-chat); display: flex; flex-direction: column; }
+        .chat-header { padding: 15px 20px; font-weight: bold; font-size: 16px; border-bottom: 1px solid #2e3035; color: #fff; }
+        .messages-container { flex-grow: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+        
         .message { display: flex; align-items: flex-start; }
-
-        .avatar {
-            width: 40px;
-            height: 40px;
-            background-color: var(--discord-blue);
-            border-radius: 50%;
-            margin-right: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            text-transform: uppercase;
-            flex-shrink: 0;
-        }
-
+        .message.private-msg { background: rgba(88, 101, 242, 0.05); border-left: 3px solid var(--discord-blue); padding-left: 5px; }
+        
+        .avatar { width: 40px; height: 40px; background-color: var(--discord-blue); border-radius: 50%; margin-right: 16px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; text-transform: uppercase; flex-shrink: 0; }
         .message-content { display: flex; flex-direction: column; }
         .message-user { font-weight: 600; color: #f2f3f5; font-size: 15px; margin-bottom: 4px; }
         .message-user span { font-size: 11px; color: var(--text-muted); font-weight: normal; margin-left: 4px; }
@@ -125,84 +45,20 @@
         .message-text { color: var(--text-main); font-size: 15px; word-break: break-word; line-height: 1.4; }
 
         .input-area { padding: 0 20px 24px 20px; }
-        .input-wrapper {
-            background-color: var(--bg-input);
-            border-radius: 8px;
-            padding: 12px 16px;
-            display: flex;
-            align-items: center;
-        }
-
+        .input-wrapper { background-color: var(--bg-input); border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; }
         #input { flex-grow: 1; background: none; border: none; outline: none; color: var(--text-main); font-size: 15px; }
 
-        /* Правий Сайдбар */
-        .right-sidebar {
-            width: 240px;
-            background-color: var(--bg-sidebar);
-            display: flex;
-            flex-direction: column;
-            border-left: 1px solid #2e3035;
-            flex-shrink: 0;
-            padding: 15px 10px;
-            gap: 20px;
-        }
-
-        .section-title {
-            font-size: 12px;
-            font-weight: bold;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 8px;
-        }
-
-        .user-list-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 6px;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-
-        .user-list-item .mini-avatar {
-            width: 24px;
-            height: 24px;
-            background: var(--discord-blue);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 11px;
-            font-weight: bold;
-        }
-
-        .friend-btn {
-            background: var(--discord-blue);
-            color: white;
-            border: none;
-            padding: 8px 10px;
-            border-radius: 4px;
-            cursor: pointer;
-            width: 100%;
-            font-size: 13px;
-            font-weight: 500;
-        }
-        .friend-btn:hover { background-color: #4752c4; }
-
-        #friend-id-input {
-            width: 100%;
-            padding: 8px;
-            background: var(--bg-input);
-            border: none;
-            border-radius: 4px;
-            color: white;
-            margin-bottom: 6px;
-            font-size: 13px;
-        }
-
+        /* Права панель */
+        .right-sidebar { width: 240px; background-color: var(--bg-sidebar); display: flex; flex-direction: column; border-left: 1px solid #2e3035; flex-shrink: 0; padding: 15px 10px; gap: 20px; }
+        .section-title { font-size: 12px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+        .user-list-item { display: flex; align-items: center; gap: 10px; padding: 6px; border-radius: 4px; font-size: 14px; cursor: pointer; }
+        .user-list-item:hover { background: #35373c; }
+        .user-list-item.active-chat { background: #404249; color: #fff; }
+        .user-list-item .mini-avatar { width: 24px; height: 24px; background: var(--discord-blue); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; color: white; }
+        
+        .friend-btn { background: var(--discord-blue); color: white; border: none; padding: 8px 10px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 13px; font-weight: 500; }
+        #friend-id-input { width: 100%; padding: 8px; background: var(--bg-input); border: none; border-radius: 4px; color: white; margin-bottom: 6px; font-size: 13px; }
         ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: var(--bg-darker); border-radius: 4px; }
     </style>
 </head>
@@ -211,10 +67,10 @@
     <div class="sidebar">
         <div class="server-header">🪐 Мій Сервер</div>
         <div class="channels-list">
-            <div class="channel-item active">основний</div>
+            <div class="channel-item active" id="channel-main-btn" onclick="switchToMainChat()">основний</div>
         </div>
         <div class="user-profile" id="my-profile-box" style="display:none;">
-            <div class="mini-avatar" id="my-avatar" style="width:32px; height:32px; background:var(--discord-green); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;"></div>
+            <div class="mini-avatar" id="my-avatar" style="width:32px; height:32px; background:var(--discord-green); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; color:white;"></div>
             <div>
                 <div id="my-username" style="font-weight:600;"></div>
                 <div class="my-tag">ID: <span id="my-id"></span></div>
@@ -223,12 +79,12 @@
     </div>
 
     <div class="chat-area">
-        <div class="chat-header"># основний</div>
+        <div class="chat-header" id="chat-title"># основний</div>
         <div class="messages-container" id="messages"></div>
         <div class="input-area">
             <form id="form" action="">
                 <div class="input-wrapper">
-                    <input id="input" autocomplete="off" placeholder="Написати в #основний..." disabled />
+                    <input id="input" autocomplete="off" placeholder="Увійдіть в акаунт..." disabled />
                 </div>
             </form>
         </div>
@@ -240,12 +96,10 @@
             <input type="number" id="friend-id-input" placeholder="Введіть 4-значний ID..." />
             <button class="friend-btn" id="add-friend-btn">Надіслати запит</button>
         </div>
-
         <div>
-            <div class="section-title">Друзі онлайн</div>
-            <div id="friends-box" style="font-size:13px; color:var(--text-muted);">У вас поки немає друзів</div>
+            <div class="section-title">Друзі (Клікніть для ЛС)</div>
+            <div id="friends-box"></div>
         </div>
-
         <div>
             <div class="section-title">Всі в мережі</div>
             <div id="online-users-list"></div>
@@ -259,123 +113,127 @@
         const input = document.getElementById('input');
         const messagesContainer = document.getElementById('messages');
 
-        let globalUsersCache = []; // Зберігаємо список усіх, щоб швидко перемальовувати друзів
-        let myFriendsList = [];    // Список ID моїх друзів
+        let currentChatTarget = null; // null означає загальний чат, інакше — ID друга для ЛС
+        let myId = null;
+        let globalUsersCache = [];
+        let myFriendsList = [];
+        let allMessages = []; // Зберігаємо локально всі отримані повідомлення
 
-        function askForUsername() {
-            let name = prompt("Створіть унікальний нікнейм для входу:");
-            if (!name) {
-                askForUsername();
-                return;
-            }
+        function askAuth() {
+            let name = prompt("Введіть нікнейм:");
+            if (!name) return askAuth();
+            let pass = prompt("Введіть пароль (якщо нік новий, він створиться з цим паролем):");
+            if (!pass) return askAuth();
 
-            socket.emit('register user', name, (response) => {
-                if (response.success) {
+            socket.emit('register user', { username: name, password: pass }, (res) => {
+                if (res.success) {
+                    myId = res.user.id;
                     document.getElementById('my-profile-box').style.display = 'flex';
-                    document.getElementById('my-username').textContent = response.user.username;
-                    document.getElementById('my-id').textContent = response.user.id;
-                    document.getElementById('my-avatar').textContent = response.user.avatar;
+                    document.getElementById('my-username').textContent = res.user.username;
+                    document.getElementById('my-id').textContent = res.user.id;
+                    document.getElementById('my-avatar').textContent = res.user.avatar;
                     
                     input.disabled = false;
                     input.placeholder = `Написати в #основний...`;
                 } else {
-                    alert(response.reason);
-                    askForUsername();
+                    alert(res.reason);
+                    askAuth();
                 }
             });
         }
 
-        askForUsername();
+        askAuth();
 
-        function displayMessage(msg) {
-            const messageDiv = document.createElement('div');
-            messageDiv.classList.add('message');
-            messageDiv.innerHTML = `
-                <div class="avatar">${msg.avatar}</div>
-                <div class="message-content">
-                    <div class="message-user">
-                        ${msg.user} <span>#${msg.userId}</span>
-                        <span class="message-time">${msg.time}</span>
+        function renderMessages() {
+            messagesContainer.innerHTML = '';
+            allMessages.forEach(msg => {
+                // Рішення, чи показувати повідомлення в поточному вікні
+                if (!currentChatTarget) {
+                    // Ми в загальному чаті — показуємо тільки загальні повідомлення
+                    if (msg.isPrivate) return;
+                } else {
+                    // Ми в приватному чаті — показуємо повідомлення тільки між мною та цим другом
+                    if (!msg.isPrivate) return;
+                    const isFromMeToFriend = (msg.userId === myId && msg.toId === currentChatTarget);
+                    const isFromFriendToMe = (msg.userId === currentChatTarget && msg.toId === myId);
+                    if (!isFromMeToFriend && !isFromFriendToMe) return;
+                }
+
+                const messageDiv = document.createElement('div');
+                messageDiv.classList.add('message');
+                if (msg.isPrivate) messageDiv.classList.add('private-msg');
+                
+                messageDiv.innerHTML = `
+                    <div class="avatar">${msg.avatar}</div>
+                    <div class="message-content">
+                        <div class="message-user">
+                            ${msg.user} <span>#${msg.userId} ${msg.isPrivate ? '[ЛС]' : ''}</span>
+                            <span class="message-time">${msg.time}</span>
+                        </div>
+                        <div class="message-text">${msg.text}</div>
                     </div>
-                    <div class="message-text">${msg.text}</div>
-                </div>
-            `;
-            messagesContainer.appendChild(messageDiv);
+                `;
+                messagesContainer.appendChild(messageDiv);
+            });
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function switchToMainChat() {
+            currentChatTarget = null;
+            document.getElementById('channel-main-btn').classList.add('active');
+            document.getElementById('chat-title').textContent = '# основний';
+            input.placeholder = "Написати в #основний...";
+            // Знімаємо підсвічування з друзів
+            document.querySelectorAll('#friends-box .user-list-item').forEach(el => el.classList.remove('active-chat'));
+            renderMessages();
+        }
+
+        function switchToPrivateChat(friendId, friendName) {
+            currentChatTarget = friendId;
+            document.getElementById('channel-main-btn').classList.remove('active');
+            document.getElementById('chat-title').textContent = `💬 Особисті з ${friendName}`;
+            input.placeholder = `Написати для ${friendName}...`;
+            
+            document.querySelectorAll('#friends-box .user-list-item').forEach(el => {
+                el.classList.remove('active-chat');
+                if(parseInt(el.dataset.id) === friendId) el.classList.add('active-chat');
+            });
+            renderMessages();
         }
 
         form.addEventListener('submit', (e) => {
             e.preventDefault();
             if (input.value.trim()) {
-                socket.emit('chat message', input.value);
+                socket.emit('chat message', {
+                    text: input.value,
+                    toId: currentChatTarget // передаємо ID отримувача, якщо це ЛС
+                });
                 input.value = '';
             }
         });
 
-        // Оновлення списку друзів на екрані
-        function renderFriends() {
-            const friendsContainer = document.getElementById('friends-box');
-            friendsContainer.innerHTML = '';
-
-            const activeFriends = globalUsersCache.filter(u => myFriendsList.includes(u.id));
-
-            if (activeFriends.length === 0) {
-                friendsContainer.innerHTML = '<div style="font-size:13px; color:var(--text-muted);">У вас поки немає друзів</div>';
-                return;
-            }
-
-            activeFriends.forEach(u => {
-                const fItem = document.createElement('div');
-                fItem.classList.add('user-list-item');
-                fItem.innerHTML = `
-                    <div class="mini-avatar" style="background:var(--discord-green)">${u.avatar}</div>
-                    <div>${u.username} <span style="font-size:11px; color:var(--text-muted);">#${u.id}</span></div>
-                `;
-                friendsContainer.appendChild(fItem);
-            });
-        }
-
-        // Клікнули "Додати друга"
         document.getElementById('add-friend-btn').addEventListener('click', () => {
             const idInput = document.getElementById('friend-id-input');
             const targetId = parseInt(idInput.value);
             if (!targetId) return;
 
             socket.emit('add friend', targetId, (res) => {
-                if (res.success) {
-                    alert(`Успішно! ${res.friendName} доданий у друзі.`);
-                    if (!myFriendsList.includes(targetId)) {
-                        myFriendsList.push(targetId); // Додаємо локально в список друзів
-                    }
-                    renderFriends(); // Одразу перемальовуємо блок на екрані
-                } else {
-                    alert(res.reason);
-                }
+                alert(res.success ? `Успішно додано!` : res.reason);
                 idInput.value = '';
             });
         });
 
-        // Хтось інший додав тебе
         socket.on('friend added', (data) => {
-            alert(`Користувач ${data.username} #${data.id} додав вас у друзі!`);
-            if (!myFriendsList.includes(data.id)) {
-                myFriendsList.push(data.id);
-            }
-            renderFriends();
+            alert(`Користувач ${data.username} додав вас у друзі!`);
         });
 
-        // Оновлення списку користувачів онлайн
         socket.on('update users', (users) => {
-            globalUsersCache = users; // Оновлюємо кеш
-            
+            globalUsersCache = users;
             const listContainer = document.getElementById('online-users-list');
             listContainer.innerHTML = '';
 
-            const myId = parseInt(document.getElementById('my-id').textContent || "0");
             const myUserObj = users.find(u => u.id === myId);
-            
-            if (myUserObj && myUserObj.friends) {
-                myFriendsList = myUserObj.friends; // Синхронізуємо друзів з сервером
-            }
+            if (myUserObj && myUserObj.friends) myFriendsList = myUserObj.friends;
 
             users.forEach(u => {
                 const item = document.createElement('div');
@@ -387,20 +245,37 @@
                 listContainer.appendChild(item);
             });
 
-            renderFriends(); // Перемальовуємо друзів при будь-якій зміні онлайну
+            // Рендеримо друзів у клікабельний список
+            const friendsContainer = document.getElementById('friends-box');
+            friendsContainer.innerHTML = '';
+            const activeFriends = users.filter(u => myFriendsList.includes(u.id));
+
+            if (activeFriends.length === 0) {
+                friendsContainer.innerHTML = '<div style="font-size:13px; color:var(--text-muted);">Немає друзів онлайн</div>';
+            } else {
+                activeFriends.forEach(u => {
+                    const fItem = document.createElement('div');
+                    fItem.classList.add('user-list-item');
+                    fItem.dataset.id = u.id;
+                    if (currentChatTarget === u.id) fItem.classList.add('active-chat');
+                    fItem.innerHTML = `
+                        <div class="mini-avatar" style="background:var(--discord-green)">${u.avatar}</div>
+                        <div>${u.username} <span style="font-size:11px; color:var(--text-muted);">#${u.id}</span></div>
+                    `;
+                    fItem.onclick = () => switchToPrivateChat(u.id, u.username);
+                    friendsContainer.appendChild(fItem);
+                });
+            }
         });
 
         socket.on('load history', (history) => {
-            messagesContainer.innerHTML = '';
-            if (Array.isArray(history)) {
-                history.forEach(msg => displayMessage(msg));
-            }
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            allMessages = history;
+            renderMessages();
         });
 
         socket.on('chat message', (msg) => {
-            displayMessage(msg);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            allMessages.push(msg);
+            renderMessages();
         });
     </script>
 </body>
