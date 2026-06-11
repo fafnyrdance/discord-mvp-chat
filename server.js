@@ -4,9 +4,9 @@ const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 const PORT = process.env.PORT || 3000;
 
-let messagesHistory = []; // Історія головного чату (#основний)
-let registeredUsers = {}; // База акаунтів: { username.toLowerCase(): { username, password, id, avatar } }
-let onlineUsers = {};     // Хто зараз в мережі: { socketId: { id, username, avatar, friends: [] } }
+let messagesHistory = []; 
+let registeredUsers = {}; // { username.toLowerCase(): { username, password, id, avatar, friends: [] } }
+let onlineUsers = {};     // { socketId: { id, username, avatar, friends: [] } }
 
 app.get('/', (req, res) => {
     res.sendFile(__dirname + '/index.html');
@@ -15,7 +15,6 @@ app.get('/', (req, res) => {
 io.on('connection', (socket) => {
     console.log('Нове підключення');
 
-    // ВХІД АБО РЕЄСТРАЦІЯ З ПАРОЛЕМ
     socket.on('register user', (data, callback) => {
         const username = data.username.trim();
         const password = data.password.trim();
@@ -25,53 +24,45 @@ io.on('connection', (socket) => {
             return callback({ success: false, reason: "Нікнейм від 2 символів, пароль від 4 символів!" });
         }
 
-        // Перевіряємо, чи цей юзер уже онлайн прямо зараз
         const isAlreadyOnline = Object.values(onlineUsers).some(u => u.username.toLowerCase() === lowerName);
         if (isAlreadyOnline) {
-            return callback({ success: false, reason: "Цей користувач вже зайшов у чат з іншого пристрою!" });
+            return callback({ success: false, reason: "Цей користувач вже онлайн!" });
         }
 
         let userAccount;
 
         if (registeredUsers[lowerName]) {
-            // Акаунт існує — перевіряємо пароль
             if (registeredUsers[lowerName].password !== password) {
-                return callback({ success: false, reason: "Невірний пароль для цього нікнейму!" });
+                return callback({ success: false, reason: "Невірний пароль!" });
             }
             userAccount = registeredUsers[lowerName];
         } else {
-            // Акаунту немає — реєструємо новий
             const userId = Math.floor(1000 + Math.random() * 9000);
             userAccount = {
                 id: userId,
                 username: username,
                 password: password,
-                avatar: username.charAt(0).toUpperCase()
+                avatar: username.charAt(0).toUpperCase(),
+                friends: [] // Список ID друзів тепер ПОРУЧ з паролем назавжди!
             };
-            registeredUsers[lowerName] = userAccount; // Зберігаємо в "базу"
+            registeredUsers[lowerName] = userAccount;
         }
 
-        // Додаємо в список тих, хто онлайн
+        // Авторизуємо в онлайн
         onlineUsers[socket.id] = {
             id: userAccount.id,
             username: userAccount.username,
             avatar: userAccount.avatar,
-            friends: onlineUsers[socket.id]?.friends || [] // зберігаємо друзів якщо були
+            friends: userAccount.friends // підвантажуємо список друзів з бази
         };
 
-        // Прив'язуємо socket до кімнати з його особистим ID для ЛС
         socket.join(`user_${userAccount.id}`);
-
         callback({ success: true, user: onlineUsers[socket.id] });
 
-        // Оновлюємо список для всіх
         io.emit('update users', Object.values(onlineUsers));
-        
-        // Шлемо історію загального чату
         socket.emit('load history', messagesHistory);
     });
 
-    // ОБРОБКА ПОВІДОМЛЕНЬ (ЗАГАЛЬНІ ТА ОСОБИСТІ)
     socket.on('chat message', (data) => {
         const currentUser = onlineUsers[socket.id];
         if (!currentUser) return;
@@ -85,22 +76,19 @@ io.on('connection', (socket) => {
             userId: currentUser.id,
             avatar: currentUser.avatar,
             time: timeString,
-            isPrivate: !!data.toId, // прапорець особистого повідомлення
+            isPrivate: !!data.toId,
             toId: data.toId
         };
 
         if (data.toId) {
-            // Особисте повідомлення: шлемо відправнику і отримувачу
             io.to(`user_${data.toId}`).to(`user_${currentUser.id}`).emit('chat message', msgObject);
         } else {
-            // Загальний чат: зберігаємо в історію і шлемо всім
             messagesHistory.push(msgObject);
             if (messagesHistory.length > 100) messagesHistory.shift();
             io.emit('chat message', msgObject);
         }
     });
 
-    // ДОДАВАННЯ В ДРУЗІ
     socket.on('add friend', (targetId, callback) => {
         const currentUser = onlineUsers[socket.id];
         if (!currentUser) return callback({ success: false, reason: "Ви не увійшли!" });
@@ -108,26 +96,38 @@ io.on('connection', (socket) => {
         const searchId = parseInt(targetId);
         if (searchId === currentUser.id) return callback({ success: false, reason: "Не можна додати себе!" });
 
-        const targetSocketId = Object.keys(onlineUsers).find(sid => onlineUsers[sid].id === searchId);
-        if (!targetSocketId) return callback({ success: false, reason: "Користувач офлайн або не існує!" });
+        // Шукаємо в базі зареєстрованих (щоб можна було додати навіть того, хто зараз офлайн!)
+        const targetUserAccount = Object.values(registeredUsers).find(u => u.id === searchId);
+        
+        if (!targetUserAccount) {
+            return callback({ success: false, reason: "Користувача з таким ID не існує в системі!" });
+        }
 
-        const targetUser = onlineUsers[targetSocketId];
+        // Перевіряємо через базу акаунтів
+        const myAccount = registeredUsers[currentUser.username.toLowerCase()];
 
-        if (currentUser.friends.includes(searchId)) {
+        if (myAccount.friends.includes(searchId)) {
             return callback({ success: false, reason: "Вже у друзях!" });
         }
 
-        // Взаємно додаємо в масиви друзів
-        currentUser.friends.push(searchId);
-        targetUser.friends.push(currentUser.id);
+        // Зберігаємо в базу акаунтів назавжди
+        myAccount.friends.push(searchId);
+        targetUserAccount.friends.push(myAccount.id);
 
-        // Сповіщаємо того, КОМУ кинули запит
-        io.to(targetSocketId).emit('friend added', { username: currentUser.username, id: currentUser.id });
-        
-        // КЛЮЧОВЕ ОНОВЛЕННЯ: розсилаємо новий список користувачів (з оновленими масивами друзів) ВСІМ
+        // Оновлюємо дані в онлайні для поточного юзера
+        currentUser.friends = myAccount.friends;
+
+        // Якщо друг теж зараз онлайн, оновлюємо і його масив у мережі
+        const targetSocketId = Object.keys(onlineUsers).find(sid => onlineUsers[sid].id === searchId);
+        if (targetSocketId) {
+            onlineUsers[targetSocketId].friends = targetUserAccount.friends;
+            io.to(targetSocketId).emit('friend added', { username: currentUser.username, id: myAccount.id });
+        }
+
+        // Оновлюємо списки для всіх
         io.emit('update users', Object.values(onlineUsers));
 
-        callback({ success: true, friendName: targetUser.username, friendId: targetUser.id });
+        callback({ success: true, friendName: targetUserAccount.username, friendId: targetUserAccount.id });
     });
 
     socket.on('disconnect', () => {
