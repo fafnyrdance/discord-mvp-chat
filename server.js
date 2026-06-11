@@ -5,8 +5,8 @@ const io = require('socket.io')(http);
 const PORT = process.env.PORT || 3000;
 
 let messagesHistory = []; 
-let registeredUsers = {}; // База акаунтів
-let onlineUsers = {};     // Хто в мережі
+let registeredUsers = {}; 
+let onlineUsers = {};     
 
 app.get('/', (req, res) => {
     res.sendFile(__dirname + '/index.html');
@@ -61,7 +61,6 @@ io.on('connection', (socket) => {
         socket.emit('load history', messagesHistory);
     });
 
-    // УНІВЕРСАЛЬНА ОБРОБКА ПОВІДОМЛЕНЬ (ТЕКСТ АБО ГС)
     socket.on('chat message', (data) => {
         const currentUser = onlineUsers[socket.id];
         if (!currentUser) return;
@@ -71,7 +70,7 @@ io.on('connection', (socket) => {
         
         const msgObject = {
             text: data.text || null,
-            audio: data.audio || null, // Тут зберігатиметься аудіо в форматі base64
+            audio: data.audio || null, 
             user: currentUser.username,
             userId: currentUser.id,
             avatar: currentUser.avatar,
@@ -88,6 +87,47 @@ io.on('connection', (socket) => {
             io.emit('chat message', msgObject);
         }
     });
+
+    // ================= СИГНАЛІНГ ДЛЯ ВІДЕОДЗВІНКІВ (WebRTC) =================
+    
+    // 1. Коли хтось дзвонить
+    socket.on('call-user', (data) => {
+        const currentUser = onlineUsers[socket.id];
+        if (!currentUser) return;
+        
+        // Пересилаємо пропозицію (offer) дзвінка у кімнату отримувача
+        io.to(`user_${data.toId}`).emit('incoming-call', {
+            fromId: currentUser.id,
+            fromName: currentUser.username,
+            offer: data.offer,
+            video: data.video // чи це відеодзвінок
+        });
+    });
+
+    // 2. Коли на дзвінок відповіли
+    socket.on('accept-call', (data) => {
+        const currentUser = onlineUsers[socket.id];
+        if (!currentUser) return;
+
+        // Пересилаємо відповідь (answer) тому, хто дзвонив
+        io.to(`user_${data.toId}`).emit('call-accepted', {
+            answer: data.answer
+        });
+    });
+
+    // 3. Коли дзвінок відхилили або скинули
+    socket.on('reject-or-end-call', (data) => {
+        io.to(`user_${data.toId}`).emit('call-ended');
+    });
+
+    // 4. Обмін мережевими кандидатами (ICE Candidates)
+    socket.on('ice-candidate', (data) => {
+        io.to(`user_${data.toId}`).emit('ice-candidate', {
+            candidate: data.candidate
+        });
+    });
+
+    // =======================================================================
 
     socket.on('add friend', (targetId, callback) => {
         const currentUser = onlineUsers[socket.id];
