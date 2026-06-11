@@ -23,7 +23,6 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg-darker); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; position: relative; }
 
-        /* ВІКНО АВТОРИЗАЦІЇ (ЛОГІН) */
         .auth-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: var(--bg-darker); display: flex; align-items: center; justify-content: center; z-index: 9999; }
         .auth-box { background: var(--bg-modal); width: 100%; max-width: 480px; padding: 32px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); text-align: center; }
         .auth-title { font-size: 24px; font-weight: 600; color: #fff; margin-bottom: 8px; }
@@ -36,7 +35,6 @@
         .auth-btn:hover { background: var(--discord-blue-hover); }
         .auth-error { color: var(--discord-red); font-size: 14px; margin-top: 12px; display: none; text-align: left; }
 
-        /* ОСНОВНИЙ ІНТЕРФЕЙС ЧАТУ */
         .sidebar { width: 220px; background-color: var(--bg-sidebar); display: flex; flex-direction: column; flex-shrink: 0; }
         .server-header { padding: 15px; font-weight: bold; font-size: 16px; border-bottom: 1px solid #1f2023; color: #fff; }
         .channels-list { flex-grow: 1; padding: 10px 8px; }
@@ -94,8 +92,6 @@
         
         .friend-btn { background: var(--discord-blue); color: white; border: none; padding: 8px 10px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 13px; font-weight: 500; }
         #friend-id-input { width: 100%; padding: 8px; background: var(--bg-input); border: none; border-radius: 4px; color: white; margin-bottom: 6px; font-size: 13px; }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-thumb { background: var(--bg-darker); border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -104,17 +100,14 @@
         <div class="auth-box">
             <div class="auth-title">З поверненням!</div>
             <div class="auth-subtitle">Ми так раді бачити вас знову!</div>
-            
             <div class="auth-form-group">
-                <label class="auth-label">Нікнейм або електронна пошта</label>
-                <input type="text" id="auth-username" class="auth-input" autocomplete="off" placeholder="Введіть ваш нікнейм">
+                <label class="auth-label">Нікнейм</label>
+                <input type="text" id="auth-username" class="auth-input" autocomplete="off" placeholder="Введіть нікнейм">
             </div>
-            
             <div class="auth-form-group">
                 <label class="auth-label">Пароль</label>
-                <input type="password" id="auth-password" class="auth-input" placeholder="Введіть ваш пароль">
+                <input type="password" id="auth-password" class="auth-input" placeholder="Введіть пароль">
             </div>
-            
             <button class="auth-btn" id="auth-submit-btn">Увійти / Зареєструватися</button>
             <div class="auth-error" id="auth-error-msg">Помилка авторизації</div>
         </div>
@@ -152,6 +145,7 @@
         <div class="video-container" id="video-container">
             <video id="localVideo" autoplay playsinline muted></video>
             <video id="remoteVideo" autoplay playsinline></video>
+            <audio id="remoteAudio" autoplay></audio>
             <div class="video-overlay-buttons">
                 <button class="end-call-btn" onclick="endCall()">Покласти слухавку 🛑</button>
             </div>
@@ -195,7 +189,6 @@
         const videoContainer = document.getElementById('video-container');
         const incomingCallPopup = document.getElementById('incoming-call-popup');
 
-        // Нові елементи модального вікна
         const authModal = document.getElementById('auth-modal');
         const authSubmitBtn = document.getElementById('auth-submit-btn');
         const authUsernameInput = document.getElementById('auth-username');
@@ -223,7 +216,45 @@
             iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
         };
 
-        // ОБРОБКА КЛІКУ НА КНОПКУ ВХОДУ В МОДАЛЦІ
+        // АВТО-ЛОГІН: Перевіряємо локальні дані на комп'ютері при завантаженні сторінки
+        window.addEventListener('DOMContentLoaded', () => {
+            const localSession = localStorage.getItem('dc_session');
+            if (localSession) {
+                const sessionData = JSON.parse(localSession);
+                // Намагаємось увійти автоматично
+                socket.emit('register user', sessionData, (res) => {
+                    if (res.success) {
+                        loginSuccess(res.user);
+                    } else {
+                        localStorage.removeItem('dc_session'); // Чистимо, якщо дані застаріли
+                    }
+                });
+            }
+        });
+
+        function loginSuccess(user) {
+            authModal.style.display = 'none';
+            myId = user.id;
+
+            // ЗБЕРІГАЄМО дані акаунту на ПК юзера, щоб вони не злітали
+            const sessionData = {
+                id: user.id,
+                username: user.username,
+                password: authPasswordInput.value.trim() || JSON.parse(localStorage.getItem('dc_session'))?.password,
+                friends: user.friends || []
+            };
+            localStorage.setItem('dc_session', JSON.stringify(sessionData));
+
+            document.getElementById('my-profile-box').style.display = 'flex';
+            document.getElementById('my-username').textContent = user.username;
+            document.getElementById('my-id').textContent = user.id;
+            document.getElementById('my-avatar').textContent = user.avatar;
+            
+            input.disabled = false;
+            micBtn.disabled = false;
+            input.placeholder = `Написати в #основний...`;
+        }
+
         authSubmitBtn.addEventListener('click', () => {
             const name = authUsernameInput.value.trim();
             const pass = authPasswordInput.value.trim();
@@ -236,18 +267,7 @@
 
             socket.emit('register user', { username: name, password: pass }, (res) => {
                 if (res.success) {
-                    // Ховаємо модалку авторизації
-                    authModal.style.display = 'none';
-
-                    myId = res.user.id;
-                    document.getElementById('my-profile-box').style.display = 'flex';
-                    document.getElementById('my-username').textContent = res.user.username;
-                    document.getElementById('my-id').textContent = res.user.id;
-                    document.getElementById('my-avatar').textContent = res.user.avatar;
-                    
-                    input.disabled = false;
-                    micBtn.disabled = false;
-                    input.placeholder = `Написати в #основний...`;
+                    loginSuccess(res.user);
                 } else {
                     authErrorMsg.textContent = res.reason;
                     authErrorMsg.style.display = 'block';
@@ -255,7 +275,6 @@
             });
         });
 
-        // Дозволяємо надсилати форму авторизації по натисканню Enter
         authPasswordInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') authSubmitBtn.click();
         });
@@ -266,7 +285,6 @@
                 recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 mediaRecorder = new MediaRecorder(recordingStream);
                 audioChunks = [];
-
                 mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
                 
                 mediaRecorder.onstop = () => {
@@ -274,20 +292,18 @@
                     if (recordingStream) {
                         recordingStream.getTracks().forEach(track => track.stop());
                     }
-                    
                     const reader = new FileReader();
                     reader.readAsDataURL(audioBlob);
                     reader.onloadend = () => {
                         socket.emit('chat message', { text: null, audio: reader.result, toId: currentChatTarget });
                     };
                 };
-
                 mediaRecorder.start();
                 isRecording = true;
                 micBtn.classList.add('recording');
                 input.disabled = true;
             } catch (err) {
-                alert("Не вдалося отримати доступ до мікрофона для запису ГС!");
+                alert("Мікрофон недоступний!");
                 isRecording = false;
                 micBtn.classList.remove('recording');
                 input.disabled = false;
@@ -295,19 +311,16 @@
         }
 
         micBtn.addEventListener('click', () => {
-            if (!isRecording) {
-                startRecording();
-            } else {
-                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                    mediaRecorder.stop();
-                }
+            if (!isRecording) startRecording();
+            else {
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
                 isRecording = false;
                 micBtn.classList.remove('recording');
                 input.disabled = false;
             }
         });
 
-        // ================= ЛОГІКА ДЗВІНКІВ =================
+        // ================= ФІКС ЗВУКУ ТА ЛОГІКА ДЗВІНКІВ =================
 
         async function startCall(withVideo) {
             if (!currentChatTarget) return;
@@ -321,8 +334,11 @@
                 peerConnection = new RTCPeerConnection(rtcConfig);
                 localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
+                // ФІКС: Надійно ловимо аудіо та відео потоки
                 peerConnection.ontrack = (event) => {
-                    document.getElementById('remoteVideo').srcObject = event.streams[0];
+                    const remoteStream = event.streams[0];
+                    document.getElementById('remoteVideo').srcObject = remoteStream;
+                    document.getElementById('remoteAudio').srcObject = remoteStream; // Дублюємо звук в аудіо-канал
                 };
 
                 peerConnection.onicecandidate = (event) => {
@@ -336,7 +352,7 @@
                 socket.emit('call-user', { toId: callActiveWith, offer: offer, video: withVideo });
 
             } catch (err) {
-                alert("Помилка: Дзвінок неможливий без дозволу на камеру/мікрофон!");
+                alert("Дзвінок скасовано: немає дозволу на медіа!");
                 endCall();
             }
         }
@@ -360,8 +376,11 @@
                 peerConnection = new RTCPeerConnection(rtcConfig);
                 localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
+                // ФІКС Отримувача
                 peerConnection.ontrack = (event) => {
-                    document.getElementById('remoteVideo').srcObject = event.streams[0];
+                    const remoteStream = event.streams[0];
+                    document.getElementById('remoteVideo').srcObject = remoteStream;
+                    document.getElementById('remoteAudio').srcObject = remoteStream;
                 };
 
                 peerConnection.onicecandidate = (event) => {
@@ -377,7 +396,6 @@
                 socket.emit('accept-call', { toId: callActiveWith, answer: answer });
 
             } catch (err) {
-                alert("Дзвінок відхилено автоматично: ви не надали дозвіл на медіа-пристрої!");
                 socket.emit('reject-or-end-call', { toId: callActiveWith });
                 closeMedia();
             }
@@ -432,6 +450,7 @@
             incomingCallData = null;
             document.getElementById('localVideo').srcObject = null;
             document.getElementById('remoteVideo').srcObject = null;
+            document.getElementById('remoteAudio').srcObject = null;
         }
 
         // ============================================================
@@ -512,8 +531,15 @@
             socket.emit('add friend', targetId, (res) => {
                 if (res.success) {
                     alert(`Успішно додано!`);
-                    savedFriendsNames[targetId] = res.friendName;
+                    savedFriendsNames[targetId] = "Друг";
                     localStorage.setItem('saved_friends_names', JSON.stringify(savedFriendsNames));
+                    
+                    // Оновлюємо список друзів на ПК
+                    const currentSession = JSON.parse(localStorage.getItem('dc_session') || '{}');
+                    if(currentSession.friends) {
+                        if(!currentSession.friends.includes(targetId)) currentSession.friends.push(targetId);
+                        localStorage.setItem('dc_session', JSON.stringify(currentSession));
+                    }
                 } else {
                     alert(res.reason);
                 }
@@ -525,6 +551,12 @@
             alert(`Користувач ${data.username} додав вас у друзі!`);
             savedFriendsNames[data.id] = data.username;
             localStorage.setItem('saved_friends_names', JSON.stringify(savedFriendsNames));
+            
+            const currentSession = JSON.parse(localStorage.getItem('dc_session') || '{}');
+            if(currentSession.friends) {
+                if(!currentSession.friends.includes(data.id)) currentSession.friends.push(data.id);
+                localStorage.setItem('dc_session', JSON.stringify(currentSession));
+            }
         });
 
         socket.on('update users', (users) => {
