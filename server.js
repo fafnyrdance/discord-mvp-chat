@@ -1,181 +1,216 @@
 const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const path = require('path');
+
 const app = express();
-const http = require('http').createServer(app);
-const io = require('socket.io')(http);
-const PORT = process.env.PORT || 3000;
-
-let messagesHistory = []; 
-let registeredUsers = {}; // Тимчасовий кеш акаунтів (поки юзери онлайн)
-let onlineUsers = {};     
-
-app.get('/', (req, res) => {
-    res.sendFile(__dirname + '/index.html');
+const server = http.createServer(app);
+const io = new Server(server, {
+    maxHttpBufferSize: 1e7 // Дозволяємо великі ГС файли (до 10 МБ)
 });
 
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Наша тимчасова база даних в оперативці
+const users = {}; 
+const messagesHistory = [];
+
 io.on('connection', (socket) => {
-    console.log('Нове підключення');
+    console.log('Клієнт підключився:', socket.id);
 
-    // Реєстрація або авторизація з локальних даних ПК
+    // РЕЄСТРАЦІЯ ТА ВХІД
     socket.on('register user', (data, callback) => {
-        const username = data.username.trim();
-        const password = data.password.trim();
-        const lowerName = username.toLowerCase();
-        let savedId = data.id ? parseInt(data.id) : null;
+        const { username, password, id } = data;
 
-        if (username.length < 2 || password.length < 4) {
-            return callback({ success: false, reason: "Нікнейм від 2 символів, пароль від 4 символів!" });
+        if (!username || !password) {
+            return callback({ success: false, reason: "Нікнейм та пароль обов'язкові!" });
         }
 
-        // Перевіряємо, чи цей юзер уже сидить в мережі прямо зараз
-        const isAlreadyOnline = Object.values(onlineUsers).some(u => u.username.toLowerCase() === lowerName && u.id !== savedId);
-        if (isAlreadyOnline) {
-            return callback({ success: false, reason: "Цей користувач вже онлайн з іншого пристрою!" });
-        }
-
-        let userAccount;
-        
-        // Якщо користувач повернувся зі своїм ID з комп'ютера
-        if (savedId && registeredUsers[lowerName]) {
-            if (registeredUsers[lowerName].password !== password) {
-                return callback({ success: false, reason: "Невірний пароль для відновлення сесії!" });
+        // 1. Авторизація за збереженою сесією (якщо є ID)
+        if (id && users[id]) {
+            if (users[id].password === password) {
+                socket.userId = id;
+                users[id].socketId = socket.id;
+                users[id].online = true;
+                
+                callback({ success: true, user: users[id] });
+                io.emit('update users', getOnlineUsersArray());
+                socket.emit('load history', messagesHistory);
+                return;
+            } else {
+                return callback({ success: false, reason: "Сесія застаріла. Увійдіть знову." });
             }
-            userAccount = registeredUsers[lowerName];
-        } 
-        // Якщо сервер перезапустився, але у юзера на ПК є старі дані — відновлюємо базу на сервері
-        else if (savedId && !registeredUsers[lowerName]) {
-            userAccount = {
-                id: savedId,
+        }
+
+        // 2. Шукаємо користувача за нікнеймом
+        let existingUser = Object.values(users).find(u => u.username.toLowerCase() === username.toLowerCase());
+
+        if (existingUser) {
+            // Якщо користувач існує — перевіряємо пароль (Вхід)
+            if (existingUser.password === password) {
+                socket.userId = existingUser.id;
+                existingUser.socketId = socket.id;
+                existingUser.online = true;
+
+                callback({ success: true, user: existingUser });
+                io.emit('update users', getOnlineUsersArray());
+                socket.emit('load history', messagesHistory);
+            } else {
+                callback({ success: false, reason: "Неправильний пароль для цього нікнейму!" });
+            }
+        } else {
+            // Якщо нікнейму немає — створюємо нового (Реєстрація)
+            const newId = Math.floor(1000 + Math.random() * 9000); // 4-значний ID
+            const avatarLetter = username.charAt(0).toUpperCase();
+
+            const newUser = {
+                id: newId,
                 username: username,
                 password: password,
-                avatar: username.charAt(0).toUpperCase(),
-                friends: data.friends || []
+                avatar: avatarLetter,
+                socketId: socket.id,
+                friends: [],
+                online: true
             };
-            registeredUsers[lowerName] = userAccount;
+
+            users[newId] = newUser;
+            socket.userId = newId;
+
+            callback({ success: true, user: newUser });
+            io.emit('update users', getOnlineUsersArray());
+            socket.emit('load history', messagesHistory);
         }
-        // Абсолютно новий юзер без ID
-        else {
-            if (registeredUsers[lowerName]) {
-                if (registeredUsers[lowerName].password !== password) {
-                    return callback({ success: false, reason: "Цей нікнейм зайнятий!" });
-                }
-                userAccount = registeredUsers[lowerName];
-            } else {
-                const userId = Math.floor(1000 + Math.random() * 9000);
-                userAccount = {
-                    id: userId,
-                    username: username,
-                    password: password,
-                    avatar: username.charAt(0).toUpperCase(),
-                    friends: []
-                };
-                registeredUsers[lowerName] = userAccount;
+    });
+
+    // ДОДАННЯ В ДРУЗІ
+    socket.on('add friend', (targetId, callback) => {
+        const myId = socket.userId;
+        if (!myId || !users[myId]) return callback({ success: false, reason: "Ви не авторизовані" });
+
+        if (myId === targetId) {
+            return callback({ success: false, reason: "Не можна додати самого себе!" });
+        }
+
+        const targetUser = users[targetId];
+        if (!targetUser) {
+            return callback({ success: false, reason: "Користувача з таким ID не знайдено!" });
+        }
+
+        // Перевіряємо, чи вже не в друзях
+        if (!users[myId].friends.includes(targetId)) {
+            users[myId].friends.push(targetId);
+        }
+        if (!targetUser.friends.includes(myId)) {
+            targetUser.friends.push(myId);
+        }
+
+        callback({ success: true });
+
+        // Оновлюємо списки в обох
+        io.emit('update users', getOnlineUsersArray());
+
+        // Повідомляємо друга, якщо він онлайн
+        if (targetUser.online && targetUser.socketId) {
+            io.to(targetUser.socketId).emit('friend added', { id: myId, username: users[myId].username });
+        }
+    });
+
+    // ПОВІДОМЛЕННЯ (ЧАТ ТА ГС)
+    socket.on('chat message', (msgData) => {
+        const myId = socket.userId;
+        if (!myId || !users[myId]) return;
+
+        const sender = users[myId];
+        const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        const fullMsg = {
+            user: sender.username,
+            userId: myId,
+            avatar: sender.avatar,
+            text: msgData.text,
+            audio: msgData.audio, 
+            time: timeNow,
+            isPrivate: msgData.toId ? true : false,
+            toId: msgData.toId
+        };
+
+        if (fullMsg.isPrivate) {
+            // Відправляємо в ЛС (собі і другу)
+            const targetUser = users[msgData.toId];
+            if (targetUser && targetUser.socketId && targetUser.online) {
+                io.to(targetUser.socketId).emit('chat message', fullMsg);
             }
-        }
-
-        // Садимо в онлайн
-        onlineUsers[socket.id] = {
-            id: userAccount.id,
-            username: userAccount.username,
-            avatar: userAccount.avatar,
-            friends: userAccount.friends
-        };
-
-        socket.join(`user_${userAccount.id}`);
-        callback({ success: true, user: onlineUsers[socket.id] });
-
-        io.emit('update users', Object.values(onlineUsers));
-        socket.emit('load history', messagesHistory);
-    });
-
-    socket.on('chat message', (data) => {
-        const currentUser = onlineUsers[socket.id];
-        if (!currentUser) return;
-
-        const now = new Date();
-        const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        
-        const msgObject = {
-            text: data.text || null,
-            audio: data.audio || null, 
-            user: currentUser.username,
-            userId: currentUser.id,
-            avatar: currentUser.avatar,
-            time: timeString,
-            isPrivate: !!data.toId,
-            toId: data.toId
-        };
-
-        if (data.toId) {
-            io.to(`user_${data.toId}`).to(`user_${currentUser.id}`).emit('chat message', msgObject);
+            socket.emit('chat message', fullMsg);
+            messagesHistory.push(fullMsg); // Зберігаємо в історію
         } else {
-            messagesHistory.push(msgObject);
-            if (messagesHistory.length > 100) messagesHistory.shift();
-            io.emit('chat message', msgObject);
+            // Загальний чат
+            io.emit('chat message', fullMsg);
+            messagesHistory.push(fullMsg);
         }
     });
 
-    // WebRTC Сигналінг
+    // СИГНАЛІНГ ДЛЯ ДЗВІНКІВ (WebRTC)
     socket.on('call-user', (data) => {
-        const currentUser = onlineUsers[socket.id];
-        if (!currentUser) return;
-        io.to(`user_${data.toId}`).emit('incoming-call', {
-            fromId: currentUser.id,
-            fromName: currentUser.username,
-            offer: data.offer,
-            video: data.video
-        });
+        const myId = socket.userId;
+        if (!myId || !users[myId]) return;
+
+        const targetUser = users[data.toId];
+        if (targetUser && targetUser.online && targetUser.socketId) {
+            io.to(targetUser.socketId).emit('incoming-call', {
+                fromId: myId,
+                fromName: users[myId].username,
+                offer: data.offer,
+                video: data.video
+            });
+        }
     });
 
     socket.on('accept-call', (data) => {
-        const currentUser = onlineUsers[socket.id];
-        if (!currentUser) return;
-        io.to(`user_${data.toId}`).emit('call-accepted', {
-            answer: data.answer
-        });
-    });
-
-    socket.on('reject-or-end-call', (data) => {
-        io.to(`user_${data.toId}`).emit('call-ended');
+        const targetUser = users[data.toId];
+        if (targetUser && targetUser.online && targetUser.socketId) {
+            io.to(targetUser.socketId).emit('call-accepted', {
+                answer: data.answer
+            });
+        }
     });
 
     socket.on('ice-candidate', (data) => {
-        io.to(`user_${data.toId}`).emit('ice-candidate', {
-            candidate: data.candidate
-        });
-    });
-
-    socket.on('add friend', (targetId, callback) => {
-        const currentUser = onlineUsers[socket.id];
-        if (!currentUser) return callback({ success: false, reason: "Ви не увійшли!" });
-
-        const searchId = parseInt(targetId);
-        if (searchId === currentUser.id) return callback({ success: false, reason: "Не можна себе!" });
-
-        // Шукаємо серед тих хто онлайн або створюємо зв'язок динамічно
-        let myAccount = registeredUsers[currentUser.username.toLowerCase()];
-        if (myAccount.friends.includes(searchId)) return callback({ success: false, reason: "Вже у друзях!" });
-
-        myAccount.friends.push(searchId);
-        currentUser.friends = myAccount.friends;
-
-        const targetSocketId = Object.keys(onlineUsers).find(sid => onlineUsers[sid].id === searchId);
-        if (targetSocketId) {
-            onlineUsers[targetSocketId].friends.push(myAccount.id);
-            io.to(targetSocketId).emit('friend added', { username: currentUser.username, id: myAccount.id });
+        const targetUser = users[data.toId];
+        if (targetUser && targetUser.online && targetUser.socketId) {
+            io.to(targetUser.socketId).emit('ice-candidate', {
+                candidate: data.candidate
+            });
         }
-
-        io.emit('update users', Object.values(onlineUsers));
-        callback({ success: true, friendId: searchId });
     });
 
+    socket.on('reject-or-end-call', (data) => {
+        const targetUser = users[data.toId];
+        if (targetUser && targetUser.online && targetUser.socketId) {
+            io.to(targetUser.socketId).emit('call-ended');
+        }
+    });
+
+    // ВІДКЛЮЧЕННЯ
     socket.on('disconnect', () => {
-        if (onlineUsers[socket.id]) {
-            delete onlineUsers[socket.id];
-            io.emit('update users', Object.values(onlineUsers));
+        if (socket.userId && users[socket.userId]) {
+            users[socket.userId].online = false;
+            console.log(`Користувач офлайн: ${users[socket.userId].username}`);
+            io.emit('update users', getOnlineUsersArray());
         }
     });
 });
 
-http.listen(PORT, () => {
-    console.log(`Сервер працює на порту ${PORT}`);
+function getOnlineUsersArray() {
+    return Object.values(users).map(u => ({
+        id: u.id,
+        username: u.username,
+        avatar: u.avatar,
+        online: u.online,
+        friends: u.friends
+    }));
+}
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`Сервер запущено на порту ${PORT}`);
 });
