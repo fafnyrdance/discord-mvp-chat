@@ -14,12 +14,12 @@
             --text-muted: #949ba4;
             --discord-blue: #5865f2;
             --discord-green: #23a55a;
+            --discord-offline: #4e5058;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg-darker); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; }
 
-        /* Ліва панель */
         .sidebar { width: 220px; background-color: var(--bg-sidebar); display: flex; flex-direction: column; flex-shrink: 0; }
         .server-header { padding: 15px; font-weight: bold; font-size: 16px; border-bottom: 1px solid #1f2023; color: #fff; }
         .channels-list { flex-grow: 1; padding: 10px 8px; }
@@ -29,7 +29,6 @@
         .user-profile { padding: 10px; background: #232428; display: flex; align-items: center; gap: 10px; font-size: 14px; }
         .user-profile .my-tag { font-size: 11px; color: var(--text-muted); }
 
-        /* Чат */
         .chat-area { flex-grow: 1; background-color: var(--bg-chat); display: flex; flex-direction: column; }
         .chat-header { padding: 15px 20px; font-weight: bold; font-size: 16px; border-bottom: 1px solid #2e3035; color: #fff; }
         .messages-container { flex-grow: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
@@ -48,12 +47,12 @@
         .input-wrapper { background-color: var(--bg-input); border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; }
         #input { flex-grow: 1; background: none; border: none; outline: none; color: var(--text-main); font-size: 15px; }
 
-        /* Права панель */
         .right-sidebar { width: 240px; background-color: var(--bg-sidebar); display: flex; flex-direction: column; border-left: 1px solid #2e3035; flex-shrink: 0; padding: 15px 10px; gap: 20px; }
         .section-title { font-size: 12px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
         .user-list-item { display: flex; align-items: center; gap: 10px; padding: 6px; border-radius: 4px; font-size: 14px; cursor: pointer; }
         .user-list-item:hover { background: #35373c; }
         .user-list-item.active-chat { background: #404249; color: #fff; }
+        .user-list-item.is-offline { opacity: 0.4; }
         .user-list-item .mini-avatar { width: 24px; height: 24px; background: var(--discord-blue); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; color: white; }
         
         .friend-btn { background: var(--discord-blue); color: white; border: none; padding: 8px 10px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 13px; font-weight: 500; }
@@ -97,7 +96,7 @@
             <button class="friend-btn" id="add-friend-btn">Надіслати запит</button>
         </div>
         <div>
-            <div class="section-title">Друзі (Клікніть для ЛС)</div>
+            <div class="section-title">Друзі</div>
             <div id="friends-box"></div>
         </div>
         <div>
@@ -113,16 +112,19 @@
         const input = document.getElementById('input');
         const messagesContainer = document.getElementById('messages');
 
-        let currentChatTarget = null; // null означає загальний чат, інакше — ID друга для ЛС
+        let currentChatTarget = null; 
         let myId = null;
         let globalUsersCache = [];
         let myFriendsList = [];
-        let allMessages = []; // Зберігаємо локально всі отримані повідомлення
+        let allMessages = [];
+        
+        // Масив локального збереження імен друзів, щоб пам'ятати їх, навіть коли вони офлайн
+        let savedFriendsNames = JSON.parse(localStorage.getItem('saved_friends_names') || '{}');
 
         function askAuth() {
             let name = prompt("Введіть нікнейм:");
             if (!name) return askAuth();
-            let pass = prompt("Введіть пароль (якщо нік новий, він створиться з цим паролем):");
+            let pass = prompt("Введіть пароль:");
             if (!pass) return askAuth();
 
             socket.emit('register user', { username: name, password: pass }, (res) => {
@@ -144,15 +146,16 @@
 
         askAuth();
 
+        function displayMessage(msg) {
+            // Залишаємо логіку відображення повідомлень без змін
+        }
+
         function renderMessages() {
             messagesContainer.innerHTML = '';
             allMessages.forEach(msg => {
-                // Рішення, чи показувати повідомлення в поточному вікні
                 if (!currentChatTarget) {
-                    // Ми в загальному чаті — показуємо тільки загальні повідомлення
                     if (msg.isPrivate) return;
                 } else {
-                    // Ми в приватному чаті — показуємо повідомлення тільки між мною та цим другом
                     if (!msg.isPrivate) return;
                     const isFromMeToFriend = (msg.userId === myId && msg.toId === currentChatTarget);
                     const isFromFriendToMe = (msg.userId === currentChatTarget && msg.toId === myId);
@@ -183,7 +186,6 @@
             document.getElementById('channel-main-btn').classList.add('active');
             document.getElementById('chat-title').textContent = '# основний';
             input.placeholder = "Написати в #основний...";
-            // Знімаємо підсвічування з друзів
             document.querySelectorAll('#friends-box .user-list-item').forEach(el => el.classList.remove('active-chat'));
             renderMessages();
         }
@@ -204,10 +206,7 @@
         form.addEventListener('submit', (e) => {
             e.preventDefault();
             if (input.value.trim()) {
-                socket.emit('chat message', {
-                    text: input.value,
-                    toId: currentChatTarget // передаємо ID отримувача, якщо це ЛС
-                });
+                socket.emit('chat message', { text: input.value, toId: currentChatTarget });
                 input.value = '';
             }
         });
@@ -218,13 +217,21 @@
             if (!targetId) return;
 
             socket.emit('add friend', targetId, (res) => {
-                alert(res.success ? `Успішно додано!` : res.reason);
+                if (res.success) {
+                    alert(`Успішно додано!`);
+                    savedFriendsNames[targetId] = res.friendName;
+                    localStorage.setItem('saved_friends_names', JSON.stringify(savedFriendsNames));
+                } else {
+                    alert(res.reason);
+                }
                 idInput.value = '';
             });
         });
 
         socket.on('friend added', (data) => {
             alert(`Користувач ${data.username} додав вас у друзі!`);
+            savedFriendsNames[data.id] = data.username;
+            localStorage.setItem('saved_friends_names', JSON.stringify(savedFriendsNames));
         });
 
         socket.on('update users', (users) => {
@@ -233,8 +240,11 @@
             listContainer.innerHTML = '';
 
             const myUserObj = users.find(u => u.id === myId);
-            if (myUserObj && myUserObj.friends) myFriendsList = myUserObj.friends;
+            if (myUserObj && myUserObj.friends) {
+                myFriendsList = myUserObj.friends;
+            }
 
+            // Рендеримо тих, хто онлайн прямо зараз
             users.forEach(u => {
                 const item = document.createElement('div');
                 item.classList.add('user-list-item');
@@ -243,26 +253,45 @@
                     <div>${u.username} <span style="font-size:11px; color:var(--text-muted);">#${u.id}</span></div>
                 `;
                 listContainer.appendChild(item);
+                
+                // Якщо цей онлайн-юзер є у нашому списку друзів, оновлюємо його ім'я в пам'яті браузера
+                if (myFriendsList.includes(u.id)) {
+                    savedFriendsNames[u.id] = u.username;
+                }
             });
+            localStorage.setItem('saved_friends_names', JSON.stringify(savedFriendsNames));
 
-            // Рендеримо друзів у клікабельний список
+            // РОЗУМНИЙ РЕНДЕР ДРУЗІВ (ОНЛАЙН + ОФЛАЙН)
             const friendsContainer = document.getElementById('friends-box');
             friendsContainer.innerHTML = '';
-            const activeFriends = users.filter(u => myFriendsList.includes(u.id));
 
-            if (activeFriends.length === 0) {
-                friendsContainer.innerHTML = '<div style="font-size:13px; color:var(--text-muted);">Немає друзів онлайн</div>';
+            if (myFriendsList.length === 0) {
+                friendsContainer.innerHTML = '<div style="font-size:13px; color:var(--text-muted);">Немає друзів</div>';
             } else {
-                activeFriends.forEach(u => {
+                myFriendsList.forEach(friendId => {
+                    const onlineFriend = users.find(u => u.id === friendId);
                     const fItem = document.createElement('div');
                     fItem.classList.add('user-list-item');
-                    fItem.dataset.id = u.id;
-                    if (currentChatTarget === u.id) fItem.classList.add('active-chat');
-                    fItem.innerHTML = `
-                        <div class="mini-avatar" style="background:var(--discord-green)">${u.avatar}</div>
-                        <div>${u.username} <span style="font-size:11px; color:var(--text-muted);">#${u.id}</span></div>
-                    `;
-                    fItem.onclick = () => switchToPrivateChat(u.id, u.username);
+                    fItem.dataset.id = friendId;
+                    if (currentChatTarget === friendId) fItem.classList.add('active-chat');
+
+                    if (onlineFriend) {
+                        // Друг в мережі (зелений статус)
+                        fItem.innerHTML = `
+                            <div class="mini-avatar" style="background:var(--discord-green)">${onlineFriend.avatar}</div>
+                            <div>${onlineFriend.username} <span style="font-size:11px; color:var(--text-muted);">#${friendId}</span></div>
+                        `;
+                        fItem.onclick = () => switchToPrivateChat(onlineFriend.id, onlineFriend.username);
+                    } else {
+                        // Друг вийшов з мережі (сірий статус, але він ЗАЛИШАЄТЬСЯ в списку!)
+                        const oldName = savedFriendsNames[friendId] || "Користувач";
+                        fItem.classList.add('is-offline');
+                        fItem.innerHTML = `
+                            <div class="mini-avatar" style="background:var(--discord-offline)">${oldName.charAt(0).toUpperCase()}</div>
+                            <div>${oldName} <span style="font-size:11px; color:var(--text-muted);">#${friendId} [офлайн]</span></div>
+                        `;
+                        fItem.onclick = () => switchToPrivateChat(friendId, oldName);
+                    }
                     friendsContainer.appendChild(fItem);
                 });
             }
