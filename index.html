@@ -166,10 +166,7 @@
             border-radius: 4px;
             font-weight: 500;
             cursor: pointer;
-            transition: background 0.2s;
         }
-
-        .send-btn:hover { background-color: #4752c4; }
 
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: var(--bg-chat); }
@@ -191,10 +188,10 @@
         <div class="chat-header"># основний</div>
         <div class="messages-container" id="messages"></div>
         <div class="input-area">
-            <form id="form" action="" style="display: block;">
+            <form id="form" action="">
                 <div class="input-wrapper">
                     <input id="input" autocomplete="off" placeholder="Написати в #основний..." />
-                    <button class="send-btn">Надіслати</button>
+                    <button type="submit" class="send-btn">Надіслати</button>
                 </div>
             </form>
         </div>
@@ -207,23 +204,27 @@
         const input = document.getElementById('input');
         const messagesContainer = document.getElementById('messages');
 
-        // Запитуємо нікнейм
-        let username = prompt("Введіть свій нікнейм для чату:") || "Гість";
+        let username = prompt("Введіть свій нікнейм:") || "Гість";
         let avatarLetter = username.charAt(0).toUpperCase();
 
-        // Функція для створення HTML-структури одного повідомлення
-        function appendMessage(data) {
+        function displayMessage(msg) {
             const messageDiv = document.createElement('div');
             messageDiv.classList.add('message');
+            
+            // Захист на випадок, якщо дані криві
+            const text = msg.text || msg;
+            const user = msg.user || "Користувач";
+            const avatar = msg.avatar || "U";
+            const time = msg.time || "Щойно";
 
             messageDiv.innerHTML = `
-                <div class="avatar">${data.avatar}</div>
+                <div class="avatar">${avatar}</div>
                 <div class="message-content">
                     <div class="message-user">
-                        ${data.user}
-                        <span class="message-time">Сьогодні о ${data.time}</span>
+                        ${user}
+                        <span class="message-time">${time}</span>
                     </div>
-                    <div class="message-text">${data.text}</div>
+                    <div class="message-text">${text}</div>
                 </div>
             `;
             messagesContainer.appendChild(messageDiv);
@@ -231,7 +232,7 @@
 
         form.addEventListener('submit', (e) => {
             e.preventDefault();
-            if (input.value) {
+            if (input.value.trim()) {
                 socket.emit('chat message', {
                     text: input.value,
                     user: username,
@@ -241,18 +242,16 @@
             }
         });
 
-        // 1. Приймаємо ВСЮ історію повідомлень від сервера при завантаженні сторінки
         socket.on('load history', (history) => {
-            messagesContainer.innerHTML = ''; // Очищаємо екран про всяк випадок
-            history.forEach(msg => {
-                appendMessage(msg);
-            });
+            messagesContainer.innerHTML = '';
+            if (Array.isArray(history)) {
+                history.forEach(msg => displayMessage(msg));
+            }
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         });
 
-        // 2. Приймаємо поодинокі нові повідомлення в реальному часі
-        socket.on('chat message', (data) => {
-            appendMessage(data);
+        socket.on('chat message', (msg) => {
+            displayMessage(msg);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         });
     </script>
