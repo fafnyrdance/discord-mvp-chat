@@ -4,7 +4,7 @@ const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 const PORT = process.env.PORT || 3000;
 
-// Масив для зберігання історії повідомлень в пам'яті сервера
+// Історія повідомлень
 let messagesHistory = [];
 
 app.get('/', (req, res) => {
@@ -14,31 +14,36 @@ app.get('/', (req, res) => {
 io.on('connection', (socket) => {
     console.log('Користувач підключився');
 
-    // ХАНДШЕЙК: Щойно користувач підключився, відправляємо йому ВСЮ історію
+    // Відправляємо історію новому клієнту
     socket.emit('load history', messagesHistory);
 
     socket.on('chat message', (data) => {
-        // Формуємо об'єкт повідомлення з часом
         const now = new Date();
         const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         
-        const fullMessage = {
-            text: data.text || data,
-            user: data.user || "Користувач",
-            avatar: data.avatar || "U",
+        // Створюємо безпечний об'єкт повідомлення
+        let msgObject = {
+            text: '',
+            user: 'Користувач',
+            avatar: 'U',
             time: timeString
         };
 
-        // Зберігаємо повідомлення в історію на сервері
-        messagesHistory.push(fullMessage);
-
-        // Обмежуємо історію, наприклад, останніми 100 повідомленнями, щоб не перевантажувати пам'ять
-        if (messagesHistory.length > 100) {
-            messagesHistory.shift(); 
+        // Перевіряємо, що саме прислав клієнт — об'єкт чи звичайну строку
+        if (typeof data === 'object' && data !== null) {
+            msgObject.text = data.text || '';
+            msgObject.user = data.user || 'Користувач';
+            msgObject.avatar = data.avatar || 'U';
+        } else {
+            msgObject.text = data;
         }
 
-        // Розсилаємо це повідомлення всім
-        io.emit('chat message', fullMessage);
+        // Зберігаємо в історію
+        messagesHistory.push(msgObject);
+        if (messagesHistory.length > 100) messagesHistory.shift();
+
+        // Шлемо всім
+        io.emit('chat message', msgObject);
     });
 
     socket.on('disconnect', () => {
