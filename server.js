@@ -117,11 +117,15 @@ io.on('connection', (socket) => {
             return callback({ success: false, reason: "Вже у друзях!" });
         }
 
+        // Взаємно додаємо в масиви друзів
         currentUser.friends.push(searchId);
         targetUser.friends.push(currentUser.id);
 
+        // Сповіщаємо того, КОМУ кинули запит
         io.to(targetSocketId).emit('friend added', { username: currentUser.username, id: currentUser.id });
-        io.to(targetSocketId).emit('update users', Object.values(onlineUsers));
+        
+        // КЛЮЧОВЕ ОНОВЛЕННЯ: розсилаємо новий список користувачів (з оновленими масивами друзів) ВСІМ
+        io.emit('update users', Object.values(onlineUsers));
 
         callback({ success: true, friendName: targetUser.username, friendId: targetUser.id });
     });
