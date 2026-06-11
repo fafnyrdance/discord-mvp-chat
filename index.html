@@ -26,7 +26,6 @@
             overflow: hidden;
         }
 
-        /* Бокова панель */
         .sidebar {
             width: 240px;
             background-color: var(--bg-sidebar);
@@ -71,7 +70,6 @@
             color: var(--text-muted);
         }
 
-        /* Зона чату */
         .chat-area {
             flex-grow: 1;
             background-color: var(--bg-chat);
@@ -96,7 +94,6 @@
             gap: 16px;
         }
 
-        /* Повідомлення */
         .message {
             display: flex;
             align-items: flex-start;
@@ -140,7 +137,6 @@
             line-height: 1.4;
         }
 
-        /* Поле введення */
         .input-area { padding: 0 20px 24px 20px; }
 
         .input-wrapper {
@@ -175,7 +171,6 @@
 
         .send-btn:hover { background-color: #4752c4; }
 
-        /* Скроллбар */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: var(--bg-chat); }
         ::-webkit-scrollbar-thumb { background: var(--bg-darker); border-radius: 4px; }
@@ -212,16 +207,31 @@
         const input = document.getElementById('input');
         const messagesContainer = document.getElementById('messages');
 
-        // Запитуємо ім'я користувача при вході
+        // Запитуємо нікнейм
         let username = prompt("Введіть свій нікнейм для чату:") || "Гість";
-        
-        // Беремо першу літеру для аватарки
         let avatarLetter = username.charAt(0).toUpperCase();
+
+        // Функція для створення HTML-структури одного повідомлення
+        function appendMessage(data) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message');
+
+            messageDiv.innerHTML = `
+                <div class="avatar">${data.avatar}</div>
+                <div class="message-content">
+                    <div class="message-user">
+                        ${data.user}
+                        <span class="message-time">Сьогодні о ${data.time}</span>
+                    </div>
+                    <div class="message-text">${data.text}</div>
+                </div>
+            `;
+            messagesContainer.appendChild(messageDiv);
+        }
 
         form.addEventListener('submit', (e) => {
             e.preventDefault();
             if (input.value) {
-                // Відправляємо об'єкт із текстом, автором та аватаркою
                 socket.emit('chat message', {
                     text: input.value,
                     user: username,
@@ -231,30 +241,18 @@
             }
         });
 
+        // 1. Приймаємо ВСЮ історію повідомлень від сервера при завантаженні сторінки
+        socket.on('load history', (history) => {
+            messagesContainer.innerHTML = ''; // Очищаємо екран про всяк випадок
+            history.forEach(msg => {
+                appendMessage(msg);
+            });
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        });
+
+        // 2. Приймаємо поодинокі нові повідомлення в реальному часі
         socket.on('chat message', (data) => {
-            const now = new Date();
-            const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-            const messageDiv = document.createElement('div');
-            messageDiv.classList.add('message');
-
-            // Перевірка на випадок якщо прийшла просто строка, а не об'єкт
-            const text = data.text || data;
-            const user = data.user || "Користувач";
-            const letter = data.avatar || "U";
-
-            messageDiv.innerHTML = `
-                <div class="avatar">${letter}</div>
-                <div class="message-content">
-                    <div class="message-user">
-                        ${user}
-                        <span class="message-time">Сьогодні о ${timeString}</span>
-                    </div>
-                    <div class="message-text">${text}</div>
-                </div>
-            `;
-
-            messagesContainer.appendChild(messageDiv);
+            appendMessage(data);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         });
     </script>
