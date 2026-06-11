@@ -145,7 +145,7 @@
         <div class="video-container" id="video-container">
             <video id="localVideo" autoplay playsinline muted></video>
             <video id="remoteVideo" autoplay playsinline></video>
-            <audio id="remoteAudio" autoplay></audio>
+            <audio id="remoteAudio" autoplay playsinline></audio>
             <div class="video-overlay-buttons">
                 <button class="end-call-btn" onclick="endCall()">Покласти слухавку 🛑</button>
             </div>
@@ -216,17 +216,15 @@
             iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
         };
 
-        // АВТО-ЛОГІН: Перевіряємо локальні дані на комп'ютері при завантаженні сторінки
         window.addEventListener('DOMContentLoaded', () => {
             const localSession = localStorage.getItem('dc_session');
             if (localSession) {
                 const sessionData = JSON.parse(localSession);
-                // Намагаємось увійти автоматично
                 socket.emit('register user', sessionData, (res) => {
                     if (res.success) {
                         loginSuccess(res.user);
                     } else {
-                        localStorage.removeItem('dc_session'); // Чистимо, якщо дані застаріли
+                        localStorage.removeItem('dc_session');
                     }
                 });
             }
@@ -236,7 +234,6 @@
             authModal.style.display = 'none';
             myId = user.id;
 
-            // ЗБЕРІГАЄМО дані акаунту на ПК юзера, щоб вони не злітали
             const sessionData = {
                 id: user.id,
                 username: user.username,
@@ -320,7 +317,24 @@
             }
         });
 
-        // ================= ФІКС ЗВУКУ ТА ЛОГІКА ДЗВІНКІВ =================
+        // ================= ЛОГІКА ДЗВІНКІВ + ПРИМУСОВИЙ ПЛЕЙ ПОТОКУ =================
+
+        function setupTrackEvent() {
+            peerConnection.ontrack = (event) => {
+                console.log("Отримано віддалений медіа-трек:", event.track.kind);
+                const remoteStream = event.streams[0];
+                
+                const rVideo = document.getElementById('remoteVideo');
+                const rAudio = document.getElementById('remoteAudio');
+
+                rVideo.srcObject = remoteStream;
+                rAudio.srcObject = remoteStream;
+
+                // ФІКС ПОЛІТИКИ БРАУЗЕРА: Штовхаємо плеєр руками, якщо він заснув
+                rVideo.play().catch(e => console.log("Чекаємо взаємодії для відео"));
+                rAudio.play().catch(e => console.log("Чекаємо взаємодії для аудіо"));
+            };
+        }
 
         async function startCall(withVideo) {
             if (!currentChatTarget) return;
@@ -334,12 +348,7 @@
                 peerConnection = new RTCPeerConnection(rtcConfig);
                 localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
-                // ФІКС: Надійно ловимо аудіо та відео потоки
-                peerConnection.ontrack = (event) => {
-                    const remoteStream = event.streams[0];
-                    document.getElementById('remoteVideo').srcObject = remoteStream;
-                    document.getElementById('remoteAudio').srcObject = remoteStream; // Дублюємо звук в аудіо-канал
-                };
+                setupTrackEvent();
 
                 peerConnection.onicecandidate = (event) => {
                     if (event.candidate) {
@@ -376,12 +385,7 @@
                 peerConnection = new RTCPeerConnection(rtcConfig);
                 localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
-                // ФІКС Отримувача
-                peerConnection.ontrack = (event) => {
-                    const remoteStream = event.streams[0];
-                    document.getElementById('remoteVideo').srcObject = remoteStream;
-                    document.getElementById('remoteAudio').srcObject = remoteStream;
-                };
+                setupTrackEvent();
 
                 peerConnection.onicecandidate = (event) => {
                     if (event.candidate) {
@@ -424,7 +428,6 @@
         });
 
         socket.on('call-ended', () => {
-            alert("Дзвінок завершено.");
             closeMedia();
         });
 
@@ -473,7 +476,8 @@
                 
                 let contentHTML = msg.text ? `<div class="message-text">${msg.text}</div>` : '';
                 if (msg.audio) {
-                    contentHTML += `<audio class="audio-player" src="${msg.audio}" controls></audio>`;
+                    // ГС рендериться стандартним плеєром з кнопками керування
+                    contentHTML += `<audio class="audio-player" src="${msg.audio}" controls preload="metadata"></audio>`;
                 }
                 
                 messageDiv.innerHTML = `
@@ -534,7 +538,6 @@
                     savedFriendsNames[targetId] = "Друг";
                     localStorage.setItem('saved_friends_names', JSON.stringify(savedFriendsNames));
                     
-                    // Оновлюємо список друзів на ПК
                     const currentSession = JSON.parse(localStorage.getItem('dc_session') || '{}');
                     if(currentSession.friends) {
                         if(!currentSession.friends.includes(targetId)) currentSession.friends.push(targetId);
@@ -605,22 +608,4 @@
                             <div class="mini-avatar" style="background:var(--discord-offline)">${oldName.charAt(0).toUpperCase()}</div>
                             <div>${oldName} <span style="font-size:11px; color:var(--text-muted);">#${friendId} [офлайн]</span></div>
                         `;
-                        fItem.onclick = () => switchToPrivateChat(friendId, oldName);
-                    }
-                    friendsContainer.appendChild(fItem);
-                });
-            }
-        });
-
-        socket.on('load history', (history) => {
-            allMessages = history;
-            renderMessages();
-        });
-
-        socket.on('chat message', (msg) => {
-            allMessages.push(msg);
-            renderMessages();
-        });
-    </script>
-</body>
-</html>
+                        fItem.onclick =
