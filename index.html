@@ -13,6 +13,8 @@
             --text-main: #dbdee1;
             --text-muted: #949ba4;
             --discord-blue: #5865f2;
+            --discord-green: #23a55a;
+            --discord-red: #da373c;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -26,8 +28,9 @@
             overflow: hidden;
         }
 
+        /* Лівий Сайдбар */
         .sidebar {
-            width: 240px;
+            width: 220px;
             background-color: var(--bg-sidebar);
             display: flex;
             flex-direction: column;
@@ -51,11 +54,8 @@
             padding: 8px 12px;
             border-radius: 4px;
             color: var(--text-muted);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            margin-bottom: 2px;
             font-size: 15px;
+            margin-bottom: 2px;
         }
 
         .channel-item.active {
@@ -63,13 +63,20 @@
             color: var(--text-main);
         }
 
-        .channel-item::before {
-            content: "# ";
-            font-weight: bold;
-            margin-right: 6px;
-            color: var(--text-muted);
-        }
+        .channel-item::before { content: "# "; font-weight: bold; }
 
+        /* Профіль поточного юзера внизу лівого сайдбару */
+        .user-profile {
+            padding: 10px;
+            background: #232428;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+        }
+        .user-profile .my-tag { font-size: 11px; color: var(--text-muted); }
+
+        /* Центральний Чат */
         .chat-area {
             flex-grow: 1;
             background-color: var(--bg-chat);
@@ -94,10 +101,7 @@
             gap: 16px;
         }
 
-        .message {
-            display: flex;
-            align-items: flex-start;
-        }
+        .message { display: flex; align-items: flex-start; }
 
         .avatar {
             width: 40px;
@@ -115,30 +119,12 @@
         }
 
         .message-content { display: flex; flex-direction: column; }
-
-        .message-user {
-            font-weight: 600;
-            color: #f2f3f5;
-            font-size: 15px;
-            margin-bottom: 4px;
-        }
-
-        .message-time {
-            font-size: 11px;
-            color: var(--text-muted);
-            margin-left: 8px;
-            font-weight: 400;
-        }
-
-        .message-text {
-            color: var(--text-main);
-            font-size: 15px;
-            word-break: break-word;
-            line-height: 1.4;
-        }
+        .message-user { font-weight: 600; color: #f2f3f5; font-size: 15px; margin-bottom: 4px; }
+        .message-user span { font-size: 11px; color: var(--text-muted); font-weight: normal; margin-left: 4px; }
+        .message-time { font-size: 11px; color: var(--text-muted); margin-left: 8px; font-weight: 400; }
+        .message-text { color: var(--text-main); font-size: 15px; word-break: break-word; line-height: 1.4; }
 
         .input-area { padding: 0 20px 24px 20px; }
-
         .input-wrapper {
             background-color: var(--bg-input);
             border-radius: 8px;
@@ -147,29 +133,76 @@
             align-items: center;
         }
 
-        #input {
-            flex-grow: 1;
-            background: none;
-            border: none;
-            outline: none;
-            color: var(--text-main);
-            font-size: 15px;
+        #input { flex-grow: 1; background: none; border: none; outline: none; color: var(--text-main); font-size: 15px; }
+
+        /* Правий Сайдбар (Користувачі та Друзі) */
+        .right-sidebar {
+            width: 240px;
+            background-color: var(--bg-sidebar);
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid #2e3035;
+            flex-shrink: 0;
+            padding: 15px 10px;
+            gap: 20px;
         }
 
-        #input::placeholder { color: #6d737d; }
+        .section-title {
+            font-size: 12px;
+            font-weight: bold;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
 
-        .send-btn {
+        .user-list-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .user-list-item .mini-avatar {
+            width: 24px;
+            height: 24px;
+            background: var(--discord-blue);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .friend-btn {
             background: var(--discord-blue);
             color: white;
             border: none;
-            padding: 6px 14px;
+            padding: 6px 10px;
             border-radius: 4px;
-            font-weight: 500;
             cursor: pointer;
+            width: 100%;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .friend-btn:hover { background-color: #4752c4; }
+
+        #friend-id-input {
+            width: 100%;
+            padding: 8px;
+            background: var(--bg-input);
+            border: none;
+            border-radius: 4px;
+            color: white;
+            margin-bottom: 6px;
+            font-size: 13px;
         }
 
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: var(--bg-chat); }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: var(--bg-darker); border-radius: 4px; }
     </style>
 </head>
@@ -179,8 +212,13 @@
         <div class="server-header">🪐 Мій Сервер</div>
         <div class="channels-list">
             <div class="channel-item active">основний</div>
-            <div class="channel-item">меми</div>
-            <div class="channel-item">ігри</div>
+        </div>
+        <div class="user-profile" id="my-profile-box" style="display:none;">
+            <div class="mini-avatar" id="my-avatar" style="width:32px; height:32px; background:var(--discord-green); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;"></div>
+            <div>
+                <div id="my-username" style="font-weight:600;"></div>
+                <div class="my-tag">ID: <span id="my-id"></span></div>
+            </div>
         </div>
     </div>
 
@@ -190,10 +228,27 @@
         <div class="input-area">
             <form id="form" action="">
                 <div class="input-wrapper">
-                    <input id="input" autocomplete="off" placeholder="Написати в #основний..." />
-                    <button type="submit" class="send-btn">Надіслати</button>
+                    <input id="input" autocomplete="off" placeholder="Написати в #основний..." disabled />
                 </div>
             </form>
+        </div>
+    </div>
+
+    <div class="right-sidebar">
+        <div>
+            <div class="section-title">Додати друга</div>
+            <input type="number" id="friend-id-input" placeholder="Введіть 4-значний ID..." />
+            <button class="friend-btn" id="add-friend-btn">Надіслати запит</button>
+        </div>
+
+        <div>
+            <div class="section-title">Друзі онлайн</div>
+            <div id="friends-box" style="font-size:13px; color:var(--text-muted);">У вас поки немає друзів</div>
+        </div>
+
+        <div>
+            <div class="section-title">Всі в мережі</div>
+            <div id="online-users-list"></div>
         </div>
     </div>
 
@@ -204,27 +259,47 @@
         const input = document.getElementById('input');
         const messagesContainer = document.getElementById('messages');
 
-        let username = prompt("Введіть свій нікнейм:") || "Гість";
-        let avatarLetter = username.charAt(0).toUpperCase();
+        // Функція реєстрації з унікальним нікнеймом
+        function askForUsername() {
+            let name = prompt("Створіть унікальний нікнейм для входу:");
+            if (!name) {
+                askForUsername();
+                return;
+            }
+
+            socket.emit('register user', name, (response) => {
+                if (response.success) {
+                    // Показуємо наш профіль внизу зліва
+                    document.getElementById('my-profile-box').style.display = 'flex';
+                    document.getElementById('my-username').textContent = response.user.username;
+                    document.getElementById('my-id').textContent = response.user.id;
+                    document.getElementById('my-avatar').textContent = response.user.avatar;
+                    
+                    // Активуємо поле вводу чату
+                    input.disabled = false;
+                    input.placeholder = `Написати в #основний...`;
+                } else {
+                    alert(response.reason); // Виводимо причину відмови
+                    askForUsername(); // Запитуємо знову
+                }
+            });
+        }
+
+        // Запуск реєстрації при завантаженні сторінки
+        askForUsername();
 
         function displayMessage(msg) {
             const messageDiv = document.createElement('div');
             messageDiv.classList.add('message');
             
-            // Захист на випадок, якщо дані криві
-            const text = msg.text || msg;
-            const user = msg.user || "Користувач";
-            const avatar = msg.avatar || "U";
-            const time = msg.time || "Щойно";
-
             messageDiv.innerHTML = `
-                <div class="avatar">${avatar}</div>
+                <div class="avatar">${msg.avatar}</div>
                 <div class="message-content">
                     <div class="message-user">
-                        ${user}
-                        <span class="message-time">${time}</span>
+                        ${msg.user} <span>#${msg.userId}</span>
+                        <span class="message-time">${msg.time}</span>
                     </div>
-                    <div class="message-text">${text}</div>
+                    <div class="message-text">${msg.text}</div>
                 </div>
             `;
             messagesContainer.appendChild(messageDiv);
@@ -233,12 +308,62 @@
         form.addEventListener('submit', (e) => {
             e.preventDefault();
             if (input.value.trim()) {
-                socket.emit('chat message', {
-                    text: input.value,
-                    user: username,
-                    avatar: avatarLetter
-                });
+                socket.emit('chat message', input.value);
                 input.value = '';
+            }
+        });
+
+        // Обробка кнопки "Додати в друзі"
+        document.getElementById('add-friend-btn').addEventListener('click', () => {
+            const idInput = document.getElementById('friend-id-input');
+            if (!idInput.value) return;
+
+            socket.emit('add friend', idInput.value, (res) => {
+                alert(res.success ? `Успішно! ${res.friendName} доданий у друзі.` : res.reason);
+                idInput.value = '';
+            });
+        });
+
+        // Повідомлення про те, що хтось додав тебе
+        socket.on('friend added', (data) => {
+            alert(`Користувач ${data.username} #${data.id} додав вас у друзі!`);
+        });
+
+        // Оновлення списку всіх користувачів онлайн та списку друзів
+        socket.on('update users', (users) => {
+            const listContainer = document.getElementById('online-users-list');
+            listContainer.innerHTML = '';
+
+            const myId = parseInt(document.getElementById('my-id').textContent);
+            const myUserObj = users.find(u => u.id === myId);
+
+            // Малюємо список усіх користувачів
+            users.forEach(u => {
+                const item = document.createElement('div');
+                item.classList.add('user-list-item');
+                item.innerHTML = `
+                    <div class="mini-avatar">${u.avatar}</div>
+                    <div>${u.username} <span style="font-size:11px; color:var(--text-muted);">#${u.id}</span></div>
+                `;
+                listContainer.appendChild(item);
+            });
+
+            // Оновлюємо панель друзів
+            if (myUserObj && myUserObj.friends.length > 0) {
+                const friendsContainer = document.getElementById('friends-box');
+                friendsContainer.innerHTML = '';
+                
+                users.forEach(u => {
+                    if (myUserObj.friends.includes(u.id)) {
+                        const fItem = document.createElement('div');
+                        fItem.classList.add('user-list-item');
+                        fItem.innerHTML = `
+                            <div class="mini-avatar" style="background:var(--discord-green)">${u.avatar}</div>
+                            <div>${u.username} <span style="font-size:11px; color:var(--text-muted);">#${u.id}</span></div>
+                        `;
+                        friendsContainer.appendChild(fItem);
+                    }
+                });
             }
         });
 
