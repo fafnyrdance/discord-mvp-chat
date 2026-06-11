@@ -14,6 +14,7 @@
             --text-muted: #949ba4;
             --discord-blue: #5865f2;
             --discord-green: #23a55a;
+            --discord-red: #da373c;
             --discord-offline: #4e5058;
         }
 
@@ -43,9 +44,23 @@
         .message-time { font-size: 11px; color: var(--text-muted); margin-left: 8px; font-weight: 400; }
         .message-text { color: var(--text-main); font-size: 15px; word-break: break-word; line-height: 1.4; }
 
+        /* Голосовий плеєр всередині повідомлення */
+        .audio-player { margin-top: 5px; outline: none; border-radius: 4px; height: 36px; max-width: 260px; }
+
         .input-area { padding: 0 20px 24px 20px; }
-        .input-wrapper { background-color: var(--bg-input); border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; }
+        .input-wrapper { background-color: var(--bg-input); border-radius: 8px; padding: 10px 16px; display: flex; align-items: center; gap: 12px; }
         #input { flex-grow: 1; background: none; border: none; outline: none; color: var(--text-main); font-size: 15px; }
+
+        /* Кнопка мікрофона */
+        .mic-btn { background: none; border: none; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; color: var(--text-muted); transition: all 0.2s; }
+        .mic-btn:hover { color: white; background: #404249; }
+        .mic-btn.recording { color: white; background: var(--discord-red); animation: pulse 1.2s infinite; }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
 
         .right-sidebar { width: 240px; background-color: var(--bg-sidebar); display: flex; flex-direction: column; border-left: 1px solid #2e3035; flex-shrink: 0; padding: 15px 10px; gap: 20px; }
         .section-title { font-size: 12px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
@@ -83,6 +98,7 @@
         <div class="input-area">
             <form id="form" action="">
                 <div class="input-wrapper">
+                    <button type="button" class="mic-btn" id="mic-btn" title="Записати ГС" disabled>🎤</button>
                     <input id="input" autocomplete="off" placeholder="Увійдіть в акаунт..." disabled />
                 </div>
             </form>
@@ -111,15 +127,19 @@
         const form = document.getElementById('form');
         const input = document.getElementById('input');
         const messagesContainer = document.getElementById('messages');
+        const micBtn = document.getElementById('mic-btn');
 
         let currentChatTarget = null; 
         let myId = null;
         let globalUsersCache = [];
         let myFriendsList = [];
         let allMessages = [];
-        
-        // Масив локального збереження імен друзів, щоб пам'ятати їх, навіть коли вони офлайн
         let savedFriendsNames = JSON.parse(localStorage.getItem('saved_friends_names') || '{}');
+
+        // Змінні для запису звуку
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
 
         function askAuth() {
             let name = prompt("Введіть нікнейм:");
@@ -136,7 +156,9 @@
                     document.getElementById('my-avatar').textContent = res.user.avatar;
                     
                     input.disabled = false;
+                    micBtn.disabled = false; // Активуємо мікрофон
                     input.placeholder = `Написати в #основний...`;
+                    initAudioRecorder(); // Налаштовуємо мікрофон розробника
                 } else {
                     alert(res.reason);
                     askAuth();
@@ -146,9 +168,58 @@
 
         askAuth();
 
-        function displayMessage(msg) {
-            // Залишаємо логіку відображення повідомлень без змін
+        // НАЛАШТУВАННЯ ЗАПИСУ ЗВУКУ
+        async function initAudioRecorder() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    audioChunks = [];
+
+                    // Перетворюємо аудіо-файл у рядок base64 для відправки через сокети
+                    const reader = new FileReader();
+                    reader.readAsDataURL(audioBlob);
+                    reader.onloadend = () => {
+                        const base64Audio = reader.result;
+                        socket.emit('chat message', {
+                            text: null,
+                            audio: base64Audio,
+                            toId: currentChatTarget
+                        });
+                    };
+                };
+            } catch (err) {
+                console.error("Помилка доступу до мікрофона:", err);
+                alert("Не вдалося отримати доступ до мікрофона. Перевір дозволи браузера!");
+            }
         }
+
+        // Клікнули на мікрофон
+        micBtn.addEventListener('click', () => {
+            if (!mediaRecorder) return;
+
+            if (!isRecording) {
+                // Почати запис
+                mediaRecorder.start();
+                isRecording = true;
+                micBtn.classList.add('recording');
+                input.disabled = true;
+                input.placeholder = "Запис голосового повідомлення...";
+            } else {
+                // Зупинити запис та надіслати
+                mediaRecorder.stop();
+                isRecording = false;
+                micBtn.classList.remove('recording');
+                input.disabled = false;
+                input.placeholder = currentChatTarget ? "Написати для друга..." : "Написати в #основний...";
+            }
+        });
 
         function renderMessages() {
             messagesContainer.innerHTML = '';
@@ -166,6 +237,12 @@
                 messageDiv.classList.add('message');
                 if (msg.isPrivate) messageDiv.classList.add('private-msg');
                 
+                // Якщо є текст — малюємо його, якщо є аудіо — вбудовуємо плеєр
+                let contentHTML = msg.text ? `<div class="message-text">${msg.text}</div>` : '';
+                if (msg.audio) {
+                    contentHTML += `<audio class="audio-player" src="${msg.audio}" controls></audio>`;
+                }
+                
                 messageDiv.innerHTML = `
                     <div class="avatar">${msg.avatar}</div>
                     <div class="message-content">
@@ -173,7 +250,7 @@
                             ${msg.user} <span>#${msg.userId} ${msg.isPrivate ? '[ЛС]' : ''}</span>
                             <span class="message-time">${msg.time}</span>
                         </div>
-                        <div class="message-text">${msg.text}</div>
+                        ${contentHTML}
                     </div>
                 `;
                 messagesContainer.appendChild(messageDiv);
@@ -240,11 +317,8 @@
             listContainer.innerHTML = '';
 
             const myUserObj = users.find(u => u.id === myId);
-            if (myUserObj && myUserObj.friends) {
-                myFriendsList = myUserObj.friends;
-            }
+            if (myUserObj && myUserObj.friends) myFriendsList = myUserObj.friends;
 
-            // Рендеримо тих, хто онлайн прямо зараз
             users.forEach(u => {
                 const item = document.createElement('div');
                 item.classList.add('user-list-item');
@@ -253,15 +327,10 @@
                     <div>${u.username} <span style="font-size:11px; color:var(--text-muted);">#${u.id}</span></div>
                 `;
                 listContainer.appendChild(item);
-                
-                // Якщо цей онлайн-юзер є у нашому списку друзів, оновлюємо його ім'я в пам'яті браузера
-                if (myFriendsList.includes(u.id)) {
-                    savedFriendsNames[u.id] = u.username;
-                }
+                if (myFriendsList.includes(u.id)) savedFriendsNames[u.id] = u.username;
             });
             localStorage.setItem('saved_friends_names', JSON.stringify(savedFriendsNames));
 
-            // РОЗУМНИЙ РЕНДЕР ДРУЗІВ (ОНЛАЙН + ОФЛАЙН)
             const friendsContainer = document.getElementById('friends-box');
             friendsContainer.innerHTML = '';
 
@@ -276,14 +345,12 @@
                     if (currentChatTarget === friendId) fItem.classList.add('active-chat');
 
                     if (onlineFriend) {
-                        // Друг в мережі (зелений статус)
                         fItem.innerHTML = `
                             <div class="mini-avatar" style="background:var(--discord-green)">${onlineFriend.avatar}</div>
                             <div>${onlineFriend.username} <span style="font-size:11px; color:var(--text-muted);">#${friendId}</span></div>
                         `;
                         fItem.onclick = () => switchToPrivateChat(onlineFriend.id, onlineFriend.username);
                     } else {
-                        // Друг вийшов з мережі (сірий статус, але він ЗАЛИШАЄТЬСЯ в списку!)
                         const oldName = savedFriendsNames[friendId] || "Користувач";
                         fItem.classList.add('is-offline');
                         fItem.innerHTML = `
