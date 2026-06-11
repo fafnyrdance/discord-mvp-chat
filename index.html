@@ -145,7 +145,7 @@
         <div class="video-container" id="video-container">
             <video id="localVideo" autoplay playsinline muted></video>
             <video id="remoteVideo" autoplay playsinline></video>
-            <audio id="remoteAudio" autoplay playsinline></audio>
+            <audio id="remoteAudio" autoplay playsinline controls style="display:none;"></audio>
             <div class="video-overlay-buttons">
                 <button class="end-call-btn" onclick="endCall()">Покласти слухавку 🛑</button>
             </div>
@@ -212,8 +212,19 @@
         let callActiveWith = null; 
         let incomingCallData = null;
 
+        // ПУБЛІЧНІ СЕРВЕРИ ДЛЯ ОБХОДУ БЛОКУВАНЬ РОУТЕРІВ (STUN/TURN)
         const rtcConfig = {
-            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' },
+                { urls: 'stun:stun4.l.google.com:19302' },
+                { urls: 'stun:stun.ekiga.net' },
+                { urls: 'stun:stun.ideasip.com' },
+                { urls: 'stun:stun.schlund.de' }
+            ],
+            iceCandidatePoolSize: 10
         };
 
         window.addEventListener('DOMContentLoaded', () => {
@@ -272,11 +283,7 @@
             });
         });
 
-        authPasswordInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') authSubmitBtn.click();
-        });
-
-        // ОБРОБКА ГС
+        // ЗАПИС ГС
         async function startRecording() {
             try {
                 recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -317,22 +324,37 @@
             }
         });
 
-        // ================= ЛОГІКА ДЗВІНКІВ + ПРИМУСОВИЙ ПЛЕЙ ПОТОКУ =================
+        // ================= СУПЕР-ФІКС ОТРИМАННЯ ЗВУКУ =================
 
         function setupTrackEvent() {
             peerConnection.ontrack = (event) => {
-                console.log("Отримано віддалений медіа-трек:", event.track.kind);
-                const remoteStream = event.streams[0];
+                console.log("Знайдено активний трек друга:", event.track.kind);
                 
                 const rVideo = document.getElementById('remoteVideo');
                 const rAudio = document.getElementById('remoteAudio');
 
-                rVideo.srcObject = remoteStream;
-                rAudio.srcObject = remoteStream;
+                // Передаємо потік в елементи відтворення
+                if (event.streams && event.streams[0]) {
+                    rVideo.srcObject = event.streams[0];
+                    rAudio.srcObject = event.streams[0];
+                } else {
+                    // Якщо потік прийшов без контейнера, створюємо його вручну
+                    const inboundStream = new MediaStream([event.track]);
+                    rVideo.srcObject = inboundStream;
+                    rAudio.srcObject = inboundStream;
+                }
 
-                // ФІКС ПОЛІТИКИ БРАУЗЕРА: Штовхаємо плеєр руками, якщо він заснув
-                rVideo.play().catch(e => console.log("Чекаємо взаємодії для відео"));
-                rAudio.play().catch(e => console.log("Чекаємо взаємодії для аудіо"));
+                // Примусова активація звукової доріжки
+                rAudio.muted = false;
+                rVideo.muted = false;
+                
+                // Пробуємо грати звук кожну секунду, поки браузер не пропустить його
+                const playAttempt = setInterval(() => {
+                    rAudio.play().then(() => {
+                        console.log("Звук успішно запущено!");
+                        clearInterval(playAttempt);
+                    }).catch(err => console.log("Браузер блокує звук, чекаємо дії користувача..."));
+                }, 1000);
             };
         }
 
@@ -361,14 +383,14 @@
                 socket.emit('call-user', { toId: callActiveWith, offer: offer, video: withVideo });
 
             } catch (err) {
-                alert("Дзвінок скасовано: немає дозволу на медіа!");
+                alert("Помилка доступу до мікрофона/камери!");
                 endCall();
             }
         }
 
         socket.on('incoming-call', async (data) => {
             incomingCallData = data;
-            document.getElementById('incoming-call-text').textContent = `Дзвонить ${data.fromName} (${data.video ? 'Відео' : 'Аудіо'})`;
+            document.getElementById('incoming-call-text').textContent = `Дзвонить ${data.fromName}`;
             incomingCallPopup.style.display = 'flex';
         });
 
@@ -423,7 +445,7 @@
             if (peerConnection && data.candidate) {
                 try {
                     await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-                } catch (e) { console.error(e); }
+                } catch (e) {}
             }
         });
 
@@ -476,8 +498,7 @@
                 
                 let contentHTML = msg.text ? `<div class="message-text">${msg.text}</div>` : '';
                 if (msg.audio) {
-                    // ГС рендериться стандартним плеєром з кнопками керування
-                    contentHTML += `<audio class="audio-player" src="${msg.audio}" controls preload="metadata"></audio>`;
+                    contentHTML += `<audio class="audio-player" src="${msg.audio}" controls preload="auto"></audio>`;
                 }
                 
                 messageDiv.innerHTML = `
@@ -608,4 +629,22 @@
                             <div class="mini-avatar" style="background:var(--discord-offline)">${oldName.charAt(0).toUpperCase()}</div>
                             <div>${oldName} <span style="font-size:11px; color:var(--text-muted);">#${friendId} [офлайн]</span></div>
                         `;
-                        fItem.onclick =
+                        fItem.onclick = () => switchToPrivateChat(friendId, oldName);
+                    }
+                    friendsContainer.appendChild(fItem);
+                });
+            }
+        });
+
+        socket.on('load history', (history) => {
+            allMessages = history;
+            renderMessages();
+        });
+
+        socket.on('chat message', (msg) => {
+            allMessages.push(msg);
+            renderMessages();
+        });
+    </script>
+</body>
+</html>
