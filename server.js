@@ -66,15 +66,15 @@ io.on('connection', (socket) => {
         }
     });
 
-    // ОНОВЛЕННЯ ПРОФІЛЮ В СТИЛІ ДС
+    // ОНОВЛЕННЯ ПРОФІЛЮ В СТИЛІ ДС (ТУТ ВАША НОВА ФУНКЦІЯ АВАТАРОК)
     socket.on('update profile', (data, callback) => {
         const myId = socket.userId;
         if (!myId || !users[myId]) return callback({ success: false });
 
-        users[myId].avatar = data.avatar || "";
-        users[myId].customStatus = data.customStatus || "";
-        users[myId].statusType = data.statusType || "online";
-        users[myId].aboutMe = data.aboutMe || "";
+        users[myId].avatar = data.avatar || users[myId].avatar;
+        users[myId].customStatus = data.customStatus || users[myId].customStatus;
+        users[myId].statusType = data.statusType || users[myId].statusType;
+        users[myId].aboutMe = data.aboutMe || users[myId].aboutMe;
 
         callback({ success: true, user: users[myId] });
         io.emit('update users', users);
