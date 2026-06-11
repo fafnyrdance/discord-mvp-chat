@@ -1,68 +1,40 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-    <meta charset="UTF-8">
-    <title>Discord Clone</title>
     <style>
-        body { font-family: sans-serif; background: #313338; color: white; margin: 0; display: flex; height: 100vh; }
-        .guilds { width: 72px; background: #1e1f22; display: flex; flex-direction: column; align-items: center; padding: 10px; gap: 10px; }
-        .sidebar { width: 240px; background: #2b2d31; padding: 15px; }
+        body { background: #313338; color: #dbdee1; margin: 0; display: flex; height: 100vh; font-family: sans-serif; }
+        .guilds { width: 72px; background: #1e1f22; display: flex; flex-direction: column; align-items: center; padding-top: 10px; }
+        .sidebar { width: 240px; background: #2b2d31; padding: 10px; }
         .chat { flex: 1; display: flex; flex-direction: column; }
-        #messages { flex: 1; padding: 20px; overflow-y: auto; }
-        .input-area { padding: 20px; }
-        input { width: 100%; padding: 10px; background: #383a40; border: none; color: white; border-radius: 5px; }
-        .btn { cursor: pointer; padding: 10px; background: #5865f2; border: none; color: white; border-radius: 5px; margin-top: 5px; }
+        #msgs { flex: 1; padding: 20px; overflow-y: auto; }
+        .input { padding: 20px; background: #383a40; margin: 10px; border-radius: 8px; }
+        input { width: 100%; background: transparent; border: none; color: white; outline: none; }
     </style>
 </head>
 <body>
-    <div class="guilds" id="guilds">
-        <div class="btn" onclick="createServer()">+ Сервер</div>
+    <div class="guilds">
+        <button onclick="s()">+</button>
     </div>
-    <div class="sidebar" id="sidebar">
+    <div class="sidebar">
         <h3>Канали</h3>
         <div id="channels"></div>
     </div>
     <div class="chat">
-        <div id="messages"></div>
-        <div class="input-area">
-            <input id="msgInput" placeholder="Повідомлення...">
-            <button class="btn" onclick="sendMessage()">Надіслати</button>
-        </div>
+        <div id="msgs"></div>
+        <div class="input"><input id="in" placeholder="Повідомлення..."></div>
     </div>
-
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
-        let myUser = null;
-        let currentServer = null;
-
-        // Вхід (автоматичний або за промптом)
-        const name = prompt("Ваш нік?") || "Гість";
-        socket.emit('register user', { username: name }, (res) => {
-            myUser = res.user;
-        });
-
-        function createServer() {
-            const name = prompt("Назва сервера:");
-            if (name) socket.emit('create server', name, (res) => {
-                if (res.success) alert("Сервер створено! ID: " + res.server.id);
-            });
-        }
-
-        function sendMessage() {
-            const text = document.getElementById('msgInput').value;
-            socket.emit('chat message', { text, serverId: currentServer, channel: "загальний" });
-            document.getElementById('msgInput').value = "";
-        }
-
-        socket.on('chat message', (msg) => {
-            const div = document.createElement('div');
-            div.textContent = `${msg.user}: ${msg.text}`;
-            document.getElementById('messages').appendChild(div);
-        });
-
-        socket.on('update users', (users) => {
-            console.log("Користувачі оновлені:", users);
+        socket.emit('register user', { username: prompt("Твій нік?") });
+        function s() { socket.emit('create server', prompt("Назва:"), (r) => alert("Сервер ID: " + r.server.id)); }
+        document.getElementById('in').onkeydown = (e) => {
+            if(e.key === 'Enter') { socket.emit('chat message', { text: e.target.value }); e.target.value = ''; }
+        };
+        socket.on('chat message', (m) => {
+            let div = document.createElement('div');
+            div.textContent = m.user + ": " + m.text;
+            document.getElementById('msgs').appendChild(div);
         });
     </script>
 </body>
